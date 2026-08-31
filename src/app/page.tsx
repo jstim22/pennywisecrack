@@ -1,51 +1,58 @@
 import Link from "next/link";
+import RecentPostsRibbon from "@/components/RecentPostsRibbon";
 
 export default function Home() {
   return (
-    <div className="mx-auto max-w-5xl px-6 py-20">
-      <div className="max-w-2xl">
-        <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-          Personal finance, minus the headache.
-        </h1>
-        <p className="mt-4 text-lg text-foreground/70">
-          PennyWisecrack helps you run the numbers and learn the basics, so
-          you can make confident money decisions without the jargon.
-        </p>
+    <>
+      <div className="mx-auto max-w-5xl px-6 py-20">
+        <div className="max-w-2xl">
+          <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
+            Personal finance, minus the{" "}
+            <span className="bg-yellow/40 px-1">headache</span>.
+          </h1>
+          <p className="mt-4 text-lg text-foreground/70">
+            PennyWisecrack breaks down money basics for teens and
+            students — saving, spending, first jobs, and everything school
+            forgot to cover.
+          </p>
 
-        <div className="mt-8 flex flex-wrap gap-4">
-          <Link
+          <div className="mt-8 flex flex-wrap gap-4">
+            <Link
+              href="/calculators"
+              className="rounded-md bg-navy px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 dark:bg-baby-blue dark:text-navy"
+            >
+              Try a calculator
+            </Link>
+            <Link
+              href="/learning"
+              className="rounded-md border border-navy px-5 py-2.5 text-sm font-medium text-navy transition-colors hover:bg-navy/5 dark:border-baby-blue dark:text-baby-blue dark:hover:bg-baby-blue/10"
+            >
+              Start learning
+            </Link>
+          </div>
+        </div>
+
+        <div className="mt-20 grid gap-6 sm:grid-cols-3">
+          <FeatureCard
+            title="Calculators"
+            description="See what saving up for something actually looks like — allowance, a first paycheck, simple budgets, and more."
             href="/calculators"
-            className="rounded-md bg-foreground px-5 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90"
-          >
-            Try a calculator
-          </Link>
-          <Link
+          />
+          <FeatureCard
+            title="Learning"
+            description="The money basics school skips — explained simply, no boring textbook required."
             href="/learning"
-            className="rounded-md border border-black/10 px-5 py-2.5 text-sm font-medium transition-colors hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
-          >
-            Start learning
-          </Link>
+          />
+          <FeatureCard
+            title="About Us"
+            description="Why we started PennyWisecrack, and who it's for."
+            href="/about"
+          />
         </div>
       </div>
 
-      <div className="mt-20 grid gap-6 sm:grid-cols-3">
-        <FeatureCard
-          title="Calculators"
-          description="Budgeting, savings, debt payoff, and more — plug in your numbers and see where you stand."
-          href="/calculators"
-        />
-        <FeatureCard
-          title="Learning"
-          description="Plain-English guides to the financial concepts that actually matter."
-          href="/learning"
-        />
-        <FeatureCard
-          title="About Us"
-          description="Why we built PennyWisecrack, and what we're trying to do differently."
-          href="/about"
-        />
-      </div>
-    </div>
+      <RecentPostsRibbon />
+    </>
   );
 }
 
@@ -61,7 +68,7 @@ function FeatureCard({
   return (
     <Link
       href={href}
-      className="block rounded-lg border border-black/10 p-6 transition-colors hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
+      className="block rounded-lg border border-border p-6 transition-colors hover:border-baby-blue hover:bg-baby-blue/5"
     >
       <h2 className="font-medium">{title}</h2>
       <p className="mt-2 text-sm text-foreground/60">{description}</p>

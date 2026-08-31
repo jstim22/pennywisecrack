@@ -8,6 +8,7 @@ const links = [
   { href: "/", label: "Home" },
   { href: "/calculators", label: "Calculators" },
   { href: "/learning", label: "Learning" },
+  { href: "/blog", label: "Blog" },
   { href: "/about", label: "About Us" },
 ];
 
@@ -16,9 +17,12 @@ export default function Nav() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="border-b border-black/10 dark:border-white/10">
+    <header className="border-b border-border">
       <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-        <Link href="/" className="text-lg font-semibold tracking-tight">
+        <Link
+          href="/"
+          className="text-lg font-semibold tracking-tight text-navy dark:text-baby-blue"
+        >
           PennyWisecrack
         </Link>
 
@@ -31,7 +35,7 @@ export default function Nav() {
                   href={link.href}
                   className={
                     active
-                      ? "text-foreground"
+                      ? "text-navy dark:text-baby-blue"
                       : "text-foreground/60 transition-colors hover:text-foreground"
                   }
                 >
@@ -54,7 +58,7 @@ export default function Nav() {
       </nav>
 
       {open && (
-        <ul className="flex flex-col gap-1 border-t border-black/10 px-6 py-3 text-sm font-medium sm:hidden dark:border-white/10">
+        <ul className="flex flex-col gap-1 border-t border-border px-6 py-3 text-sm font-medium sm:hidden">
           {links.map((link) => {
             const active = pathname === link.href;
             return (
@@ -63,7 +67,7 @@ export default function Nav() {
                   href={link.href}
                   className={
                     active
-                      ? "block py-2 text-foreground"
+                      ? "block py-2 text-navy dark:text-baby-blue"
                       : "block py-2 text-foreground/60 hover:text-foreground"
                   }
                   onClick={() => setOpen(false)}

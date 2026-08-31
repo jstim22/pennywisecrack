@@ -1,22 +1,67 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #14181f;
+  --border: #14181f1a;
+  --surface-hover: #14181f0d;
+}
+
+[data-theme="dark"] {
+  --background: #1e1f23;
+  --foreground: #f2f3f5;
+  --border: #f2f3f51f;
+  --surface-hover: #f2f3f512;
+}
+
+[data-contrast="high"] {
+  --background: #ffffff;
+  --foreground: #000000;
+  --border: #000000;
+  --surface-hover: #0000000f;
+}
+
+[data-theme="dark"][data-contrast="high"] {
+  --background: #000000;
+  --foreground: #ffffff;
+  --border: #ffffff;
+  --surface-hover: #ffffff1a;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-border: var(--border);
+  --color-surface-hover: var(--surface-hover);
+  --color-navy: #1e3a5f;
+  --color-baby-blue: #8ecdf0;
+  --color-yellow: #f2c94c;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html[data-font-size="sm"] {
+  font-size: 87.5%;
+}
+
+html[data-font-size="lg"] {
+  font-size: 112.5%;
+}
+
+html[data-font-size="xl"] {
+  font-size: 125%;
+}
+
+html[data-motion="reduced"] *,
+html[data-motion="reduced"] *::before,
+html[data-motion="reduced"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }
 
 body {
