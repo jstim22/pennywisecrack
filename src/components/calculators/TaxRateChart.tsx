@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useState, type KeyboardEvent } from "react";
+import useElementWidth from "./useElementWidth";
 import { dollars, rate1 } from "@/lib/format";
 
 type Point = { wages: number; total: number; average: number; marginal: number };
@@ -23,37 +24,23 @@ function compact(v: number) {
   return `$${v}`;
 }
 
-// Width of an element, kept up to date as it resizes, so the SVG can be drawn
-// at its real size and its text stays readable on a phone.
-function useWidth() {
-  const ref = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(680);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const observer = new ResizeObserver(([entry]) => {
-      setWidth(Math.max(Math.round(entry.contentRect.width), 240));
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-  return [ref, width] as const;
-}
-
 export default function TaxRateChart({
   curve,
   maxWages,
   current,
   capWages,
+  payNoun = "pay",
 }: {
   curve: Point[];
   maxWages: number;
   // Pay where Social Security tax stops; marked on the chart when in range.
   capWages: number;
+  // "pay" or "1099 income", for the readout.
+  payNoun?: string;
   // Where you are now (exact, not one of the sampled points).
   current: { wages: number; average: number; marginal: number };
 }) {
-  const [ref, width] = useWidth();
+  const [ref, width] = useElementWidth();
   const [hover, setHover] = useState<number | null>(null);
   const [focused, setFocused] = useState(false);
 
@@ -108,7 +95,7 @@ export default function TaxRateChart({
       <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-foreground/70">
         <span className="flex items-center gap-2">
           <span className={`h-0.5 w-4 rounded ${AVERAGE_KEY}`} />
-          Average rate on all your pay
+          Average rate on all your income
         </span>
         <span className="flex items-center gap-2">
           <span className={`h-0.5 w-4 rounded ${MARGINAL_KEY}`} />
@@ -122,7 +109,7 @@ export default function TaxRateChart({
           height={HEIGHT}
           viewBox={`0 0 ${width} ${HEIGHT}`}
           role="img"
-          aria-label={`Tax rates from $0 to ${dollars(maxWages)} of pay. Use the left and right arrow keys to move along the chart.`}
+          aria-label={`Tax rates from $0 to ${dollars(maxWages)} of ${payNoun}. Use the left and right arrow keys to move along the chart.`}
           tabIndex={0}
           onPointerMove={onPointerMove}
           onPointerLeave={() => setHover(null)}
@@ -217,7 +204,7 @@ export default function TaxRateChart({
               left: Math.min(Math.max(tooltipLeft + 10, 0), width - 176),
             }}
           >
-            <p className="font-medium">{dollars(point.wages)} of pay</p>
+            <p className="font-medium">{dollars(point.wages)} of {payNoun}</p>
             <p className="mt-1.5 flex items-center gap-2">
               <span className={`h-0.5 w-3 rounded ${AVERAGE_KEY}`} />
               <span className="font-semibold">{rate1(point.average)}</span>
@@ -242,7 +229,7 @@ export default function TaxRateChart({
         <table className="mt-2 w-full text-left text-xs">
           <thead className="text-foreground/50">
             <tr>
-              <th className="py-1 font-medium">Yearly pay</th>
+              <th className="py-1 font-medium">Yearly {payNoun}</th>
               <th className="py-1 text-right font-medium">Taxes</th>
               <th className="py-1 text-right font-medium">Average</th>
               <th className="py-1 text-right font-medium">Next dollar</th>

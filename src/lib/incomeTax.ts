@@ -13,6 +13,23 @@ import { getState, localIncomeTax, stateIncomeTax } from "./stateTax";
 const ADDITIONAL_MEDICARE_RATE = 0.009;
 export const ADDITIONAL_MEDICARE_THRESHOLD = 200_000;
 
+// Self-employment (1099) rules for 2026, single filer. Self-employment tax is
+// 12.4% Social Security (up to the wage base, shared with any W-2 pay) plus
+// 2.9% Medicare on 92.35% of net profit. Half of it is deducted from income.
+// The qualified business income (QBI) deduction is 20% of business profit,
+// phasing out between $201,750 and $276,750 of taxable income for a business
+// with no employees (Rev. Proc. 2025-32; OBBBA section 70105), with a $400
+// minimum when business income is at least $1,000. A SEP-IRA takes up to 20%
+// of net profit (after the deduction for half of self-employment tax) and is
+// limited to $72,000 (IRS Notice 2025-67).
+export const SE_SOCIAL_SECURITY_RATE = 0.124;
+export const SE_MEDICARE_RATE = 0.029;
+export const SE_EARNINGS_FACTOR = 0.9235;
+export const QBI_THRESHOLD = 201_750;
+export const QBI_PHASE_RANGE = 75_000;
+export const QBI_MINIMUM_DEDUCTION = 400;
+export const SEP_LIMIT = 72_000;
+
 export type IncomeTaxInputs = {
   // Yearly pay from a job, before anything is taken out.
   wages: number;
@@ -30,6 +47,11 @@ export type IncomeTaxInputs = {
   itemizedDeductions: number;
   // Tax credits you expect (they reduce federal income tax, down to zero).
   credits: number;
+  // 1099 / self-employment, all yearly and all optional.
+  selfEmployment?: number;
+  businessExpenses?: number;
+  selfEmployedHealthInsurance?: number;
+  sepContribution?: number;
 };
 
 function clamp(n: number, min: number, max: number) {
@@ -56,18 +78,65 @@ function compute(raw: IncomeTaxInputs) {
   const ficaWages = Math.max(wages - cafeteria, 0);
   const federalIncome =
     Math.max(wages - cafeteria - retirement, 0) + otherIncome;
+  const stateWagesOnly = Math.max(
+    wages -
+      cafeteria +
+      (state?.taxesHsaContributions ? hsa : 0) -
+      (state?.taxesRetirementDeferrals ? 0 : retirement),
+    0,
+  );
+
+  // Self-employment: net profit, self-employment tax, and the deductions
+  // that come with it.
+  const netProfit = Math.max(
+    clamp(raw.selfEmployment ?? 0, 0, 1e9) - clamp(raw.businessExpenses ?? 0, 0, 1e9),
+    0,
+  );
+  const seEarnings = netProfit * SE_EARNINGS_FACTOR;
+  const hasSeTax = seEarnings >= 400;
+  const seSocialSecurity = hasSeTax
+    ? SE_SOCIAL_SECURITY_RATE *
+      Math.min(seEarnings, Math.max(SOCIAL_SECURITY_WAGE_BASE - ficaWages, 0))
+    : 0;
+  const seMedicare = hasSeTax ? SE_MEDICARE_RATE * seEarnings : 0;
+  const selfEmploymentTax = seSocialSecurity + seMedicare;
+  const halfSeTax = selfEmploymentTax / 2;
+  const seHealth = Math.min(
+    clamp(raw.selfEmployedHealthInsurance ?? 0, 0, 1e9),
+    Math.max(netProfit - halfSeTax, 0),
+  );
+  const sep = Math.min(
+    clamp(raw.sepContribution ?? 0, 0, 1e9),
+    Math.max(netProfit - halfSeTax, 0) * 0.2,
+    SEP_LIMIT,
+  );
+  const businessIncome = Math.max(netProfit - halfSeTax - seHealth - sep, 0);
+  // These come off your income for federal and (in most states) state tax.
+  const seAdjustments = halfSeTax + seHealth + sep;
+
   const stateIncome =
-    Math.max(
-      wages -
-        cafeteria +
-        (state?.taxesHsaContributions ? hsa : 0) -
-        (state?.taxesRetirementDeferrals ? 0 : retirement),
-      0,
-    ) + otherIncome;
+    stateWagesOnly + otherIncome + Math.max(netProfit - seAdjustments, 0);
 
   const itemized = clamp(raw.itemizedDeductions, 0, 1e9);
   const deduction = Math.max(STANDARD_DEDUCTION, itemized);
-  const federalTaxable = Math.max(federalIncome - deduction, 0);
+  const incomeAfterAdjustments = Math.max(
+    federalIncome + netProfit - seAdjustments,
+    0,
+  );
+  const taxableBeforeQbi = Math.max(incomeAfterAdjustments - deduction, 0);
+  // 20% of business income, capped at 20% of taxable income; a business with
+  // no employees loses it across the phase-out range.
+  const qbiPhaseIn = Math.min(
+    Math.max((taxableBeforeQbi - QBI_THRESHOLD) / QBI_PHASE_RANGE, 0),
+    1,
+  );
+  const qbiFull = Math.min(0.2 * businessIncome, 0.2 * taxableBeforeQbi);
+  const qbiRaw = qbiFull * (1 - qbiPhaseIn);
+  const qbiDeduction =
+    businessIncome >= 1_000
+      ? Math.min(Math.max(qbiRaw, QBI_MINIMUM_DEDUCTION), taxableBeforeQbi)
+      : qbiRaw;
+  const federalTaxable = Math.max(taxableBeforeQbi - qbiDeduction, 0);
   const brackets = federalBracketBreakdown(federalTaxable);
   const taxBeforeCredits = brackets.reduce((sum, b) => sum + b.tax, 0);
   const credits = clamp(raw.credits, 0, 1e9);
@@ -76,9 +145,10 @@ function compute(raw: IncomeTaxInputs) {
   const socialSecurity =
     SOCIAL_SECURITY_RATE * Math.min(ficaWages, SOCIAL_SECURITY_WAGE_BASE);
   const medicare = MEDICARE_RATE * ficaWages;
+  // The extra 0.9% Medicare tax counts wages and self-employment earnings together.
   const additionalMedicare =
     ADDITIONAL_MEDICARE_RATE *
-    Math.max(ficaWages - ADDITIONAL_MEDICARE_THRESHOLD, 0);
+    Math.max(ficaWages + (hasSeTax ? seEarnings : 0) - ADDITIONAL_MEDICARE_THRESHOLD, 0);
 
   const stateTax = stateIncomeTax(raw.stateCode, stateIncome);
   const local = localIncomeTax(
@@ -90,9 +160,10 @@ function compute(raw: IncomeTaxInputs) {
   );
 
   const payroll = socialSecurity + medicare + additionalMedicare;
-  const total = federal + payroll + stateTax + local.tax;
-  const income = wages + otherIncome;
-  const savings = retirement + hsa + otherPreTax;
+  const total = federal + payroll + selfEmploymentTax + stateTax + local.tax;
+  const income = wages + otherIncome + netProfit;
+  // Money set aside or spent before tax on health premiums, retirement, etc.
+  const savings = retirement + hsa + otherPreTax + seHealth + sep;
 
   return {
     wages,
@@ -104,9 +175,27 @@ function compute(raw: IncomeTaxInputs) {
     savings,
     wantedRetirement,
     wantedHsa,
-    federalIncome,
+    // Income after adjustments (like half of self-employment tax), before deductions.
+    federalIncome: incomeAfterAdjustments,
     deduction,
+    qbiDeduction,
     federalTaxable,
+    selfEmployed: {
+      grossReceipts: clamp(raw.selfEmployment ?? 0, 0, 1e9),
+      expenses: Math.min(
+        clamp(raw.businessExpenses ?? 0, 0, 1e9),
+        clamp(raw.selfEmployment ?? 0, 0, 1e9),
+      ),
+      netProfit,
+      socialSecurity: seSocialSecurity,
+      medicare: seMedicare,
+      tax: selfEmploymentTax,
+      halfDeduction: halfSeTax,
+      healthDeduction: seHealth,
+      sepDeduction: sep,
+      sepCapped: clamp(raw.sepContribution ?? 0, 0, 1e9) > sep + 0.005,
+      qbiPhaseIn,
+    },
     brackets,
     taxBeforeCredits,
     credits,
@@ -115,6 +204,7 @@ function compute(raw: IncomeTaxInputs) {
     medicare,
     additionalMedicare,
     payroll,
+    selfEmploymentTax,
     state: stateTax,
     local: local.tax,
     localName: local.name,
@@ -127,9 +217,27 @@ function compute(raw: IncomeTaxInputs) {
 // avoid rounding noise.
 const MARGINAL_STEP = 100;
 
+// Which kind of pay the "next dollar" and the rate curve follow: your W-2
+// wages, or your 1099 income if that's the bigger part of what you earn.
+export function payBasis(raw: IncomeTaxInputs): "wages" | "selfEmployment" {
+  return clamp(raw.selfEmployment ?? 0, 0, 1e9) > clamp(raw.wages, 0, 1e9)
+    ? "selfEmployment"
+    : "wages";
+}
+
+function withMorePay(raw: IncomeTaxInputs, amount: number): IncomeTaxInputs {
+  return payBasis(raw) === "selfEmployment"
+    ? { ...raw, selfEmployment: (raw.selfEmployment ?? 0) + amount }
+    : { ...raw, wages: raw.wages + amount };
+}
+
 export function estimateIncomeTax(raw: IncomeTaxInputs) {
   const now = compute(raw);
-  const next = compute({ ...raw, wages: raw.wages + MARGINAL_STEP });
+  const next = compute(withMorePay(raw, MARGINAL_STEP));
+  // Tax that exists only because of the 1099 income. That's what quarterly
+  // estimated payments need to cover (W-2 pay already has tax withheld).
+  const withoutSe = compute({ ...raw, selfEmployment: 0 });
+  const taxFromSelfEmployment = Math.max(now.total - withoutSe.total, 0);
   // Rounded so floating-point noise can't tip a rate like 19.65% the wrong way.
   const slope = (a: number, b: number) =>
     Math.round(((b - a) / MARGINAL_STEP) * 1e6) / 1e6;
@@ -156,6 +264,10 @@ export function estimateIncomeTax(raw: IncomeTaxInputs) {
     topBracket:
       [...now.brackets].reverse().find((b) => b.inBracket > 0)?.rate ?? null,
     hasIncome: now.income > 0,
+    basis: payBasis(raw),
+    taxFromSelfEmployment,
+    // Set this aside each quarter (April, June, September, and January).
+    quarterlyEstimate: taxFromSelfEmployment / 4,
   };
 }
 
@@ -169,8 +281,13 @@ export function taxRateCurve(
   const step = maxWages / points;
   return Array.from({ length: points + 1 }, (_, i) => {
     const wages = step * i;
-    const here = compute({ ...raw, wages });
-    const next = compute({ ...raw, wages: wages + 250 });
+    const basis = payBasis(raw);
+    const at = (amount: number): IncomeTaxInputs =>
+      basis === "selfEmployment"
+        ? { ...raw, selfEmployment: amount }
+        : { ...raw, wages: amount };
+    const here = compute(at(wages));
+    const next = compute(at(wages + 250));
     return {
       wages,
       total: here.total,

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { check } from "../helpers";
+import { check, near } from "../helpers";
 import {
   estimateIncomeTax,
+  payBasis,
   taxRateCurve,
   type IncomeTaxInputs,
 } from "@/lib/incomeTax";
@@ -206,5 +207,197 @@ describe("guards", () => {
   it("adds up: take-home + savings + taxes = income", () => {
     const r = est({ wages: 88_000, otherIncome: 2_000, stateCode: "CA", traditionalRetirement: 5_000, hsa: 1_000, otherPreTax: 2_000 });
     expect(r.takeHome + r.savings + r.total).toBeCloseTo(90_000, 6);
+  });
+});
+
+describe("1099 / self-employment income (hand computed)", () => {
+  // $80,000 of 1099 income, $10,000 of expenses -> $70,000 net profit, no W-2 pay.
+  const se = (o: Partial<IncomeTaxInputs> = {}) =>
+    est({ wages: 0, selfEmployment: 80_000, businessExpenses: 10_000, ...o });
+  const a = se();
+  const earnings = 70_000 * 0.9235; // 64,645
+  const seTax = earnings * 0.124 + earnings * 0.029;
+  const agi = 70_000 - seTax / 2;
+  const taxableBeforeQbi = agi - 16_100;
+  // The QBI deduction is 20% of business income, but no more than 20% of taxable income.
+  const qbi = Math.min(0.2 * agi, 0.2 * taxableBeforeQbi);
+  const taxable = taxableBeforeQbi - qbi;
+  const federal = 1_240 + (taxable - 12_400) * 0.12;
+
+  check("net profit", a.selfEmployed.netProfit, 70_000);
+  check("Social Security part: 12.4% of 92.35% of profit", a.selfEmployed.socialSecurity, earnings * 0.124, 1e-6);
+  check("Medicare part: 2.9%", a.selfEmployed.medicare, earnings * 0.029, 1e-6);
+  check("self-employment tax", a.selfEmploymentTax, seTax, 1e-6);
+  check("half of it is deducted", a.selfEmployed.halfDeduction, seTax / 2, 1e-6);
+  check("income after adjustments", a.federalIncome, agi, 1e-6);
+  check("QBI deduction (capped at 20% of taxable income)", a.qbiDeduction, qbi, 1e-6);
+  check("federal taxable income", a.federalTaxable, taxable, 1e-6);
+  check("federal income tax", a.federal, federal, 0.01);
+  check("no wage-side payroll tax", a.payroll, 0);
+  check("total = income tax + self-employment tax", a.total, federal + seTax, 0.01);
+  check("take-home", a.takeHome, 70_000 - (federal + seTax), 0.01);
+  check("income counts profit, not gross receipts", a.income, 70_000);
+  check("expenses shown", a.selfEmployed.expenses, 10_000);
+  check("rate is on profit", a.totalRate, (federal + seTax) / 70_000, 1e-6);
+
+  it("all the tax comes from the 1099 income when it's your only income", () => {
+    check("tax from 1099", a.taxFromSelfEmployment, a.total, 1e-6);
+    check("a quarter of it", a.quarterlyEstimate, a.total / 4, 1e-6);
+  });
+  it("adds up: take-home + savings + taxes = income", () => {
+    near(a.takeHome + a.savings + a.total, a.income, 1e-6, "balance");
+  });
+
+  describe("with a W-2 job too", () => {
+    const b = est({ wages: 100_000, selfEmployment: 30_000 });
+    const e = 30_000 * 0.9235;
+    check("Social Security uses the room left under the wage base", b.selfEmployed.socialSecurity, e * 0.124, 1e-6);
+    check("self-employment tax", b.selfEmploymentTax, e * 0.153, 1e-6);
+    it("your W-2 tax stays as it was", () => {
+      check("W-2 payroll", b.payroll, est({ wages: 100_000 }).payroll, 1e-9);
+    });
+    it("the 1099 tax is what you'd add to your W-2 bill", () => {
+      near(b.taxFromSelfEmployment, b.total - est({ wages: 100_000 }).total, 1e-6, "difference");
+      expect(b.taxFromSelfEmployment).toBeGreaterThan(b.selfEmploymentTax);
+    });
+  });
+
+  describe("the Social Security wage base is shared with your W-2 pay", () => {
+    const c = est({ wages: 170_000, selfEmployment: 50_000 });
+    const e = 50_000 * 0.9235;
+    // Only $14,500 of the $184,500 base is left after $170,000 of wages.
+    check("Social Security on the remaining $14,500", c.selfEmployed.socialSecurity, 14_500 * 0.124, 1e-6);
+    check("Medicare on everything", c.selfEmployed.medicare, e * 0.029, 1e-6);
+    check("nothing left when wages already hit the base", est({ wages: 200_000, selfEmployment: 50_000 }).selfEmployed.socialSecurity, 0);
+  });
+
+  describe("high earners", () => {
+    const h = est({ wages: 0, selfEmployment: 250_000 });
+    const e = 250_000 * 0.9235; // 230,875
+    check("Social Security stops at the wage base", h.selfEmployed.socialSecurity, 184_500 * 0.124, 1e-6);
+    check("Additional Medicare on earnings over $200,000", h.additionalMedicare, 0.009 * (e - 200_000), 1e-6);
+    it("Additional Medicare counts wages and 1099 earnings together", () => {
+      const together = est({ wages: 150_000, selfEmployment: 100_000 });
+      check("wages + earnings over $200,000", together.additionalMedicare, 0.009 * (150_000 + 92_350 - 200_000), 1e-6);
+    });
+  });
+
+  describe("small amounts", () => {
+    check("no self-employment tax under $400 of earnings", est({ wages: 0, selfEmployment: 400 }).selfEmploymentTax, 0);
+    check("just over: $433 of profit is $400.0 of earnings", est({ wages: 0, selfEmployment: 434 }).selfEmploymentTax, 434 * 0.9235 * 0.153, 1e-6);
+    check("expenses bigger than receipts mean no profit", est({ wages: 0, selfEmployment: 5_000, businessExpenses: 9_000 }).selfEmployed.netProfit, 0);
+    check("…and no tax", est({ wages: 0, selfEmployment: 5_000, businessExpenses: 9_000 }).total, 0);
+  });
+
+  describe("the QBI (20%) deduction", () => {
+    it("is 20% of business income when taxable income is the limit only above it", () => {
+      // With a large W-2 income the 20%-of-taxable cap doesn't bind.
+      const q = est({ wages: 100_000, selfEmployment: 20_000 });
+      const netAfterHalf = 20_000 - q.selfEmployed.halfDeduction;
+      check("20% of profit after the half deduction", q.qbiDeduction, 0.2 * netAfterHalf, 1e-6);
+    });
+    it("phases out between $201,750 and $276,750 of taxable income (no employees)", () => {
+      const at = (wages: number) => est({ wages, selfEmployment: 50_000 });
+      const low = at(100_000);
+      const mid = at(200_000); // taxable before QBI lands inside the range
+      const high = at(400_000);
+      expect(mid.qbiDeduction).toBeLessThan(low.qbiDeduction);
+      // Past the range only the $400 minimum is left.
+      check("past the range: the $400 minimum", high.qbiDeduction, 400);
+      check("phase-in inside the range", mid.selfEmployed.qbiPhaseIn, (mid.federalIncome - 16_100 - 201_750) / 75_000, 1e-6);
+    });
+    it("has a $400 minimum for $1,000+ of business income", () => {
+      // $1,200 of profit: 20% would be well under $400, so it's $400.
+      check("small business", est({ wages: 50_000, selfEmployment: 1_200 }).qbiDeduction, 400);
+    });
+    it("nothing under $1,000 of business income beyond the 20%", () => {
+      const tiny = est({ wages: 50_000, selfEmployment: 900 });
+      check("just 20%", tiny.qbiDeduction, 0.2 * (900 - tiny.selfEmployed.halfDeduction), 1e-6);
+    });
+    it("can't be more than taxable income allows", () => {
+      const low = est({ wages: 0, selfEmployment: 20_000 });
+      expect(low.qbiDeduction).toBeLessThanOrEqual(0.2 * (low.federalIncome - 16_100) + 1e-9);
+    });
+    it("lowers federal tax", () => {
+      const withQbi = est({ wages: 60_000, selfEmployment: 30_000 });
+      const noQbi = est({ wages: 60_000, selfEmployment: 30_000 });
+      expect(withQbi.federal).toBeLessThan(
+        noQbi.federal + noQbi.qbiDeduction * 0.12 + 1e-9,
+      );
+    });
+  });
+
+  describe("deductions for the self-employed", () => {
+    check("SEP-IRA reduces income after adjustments", se({ sepContribution: 5_000 }).federalIncome, agi - 5_000, 1e-6);
+    check("…and isn't part of take-home", se({ sepContribution: 5_000 }).savings, 5_000, 1e-9);
+    check("SEP-IRA doesn't change self-employment tax", se({ sepContribution: 5_000 }).selfEmploymentTax, seTax, 1e-9);
+    it("SEP-IRA is capped at 20% of profit after half the SE tax", () => {
+      const cap = 0.2 * (70_000 - seTax / 2);
+      const big = se({ sepContribution: 30_000 });
+      check("deduction", big.selfEmployed.sepDeduction, cap, 1e-6);
+      expect(big.selfEmployed.sepCapped).toBe(true);
+      expect(se({ sepContribution: 5_000 }).selfEmployed.sepCapped).toBe(false);
+    });
+    it("SEP-IRA is capped at $72,000", () => {
+      check("limit", est({ wages: 0, selfEmployment: 1_000_000, sepContribution: 500_000 }).selfEmployed.sepDeduction, 72_000);
+    });
+    check("health insurance premiums come off income", se({ selfEmployedHealthInsurance: 6_000 }).federalIncome, agi - 6_000, 1e-6);
+    it("health insurance can't be more than profit", () => {
+      const r = est({ wages: 0, selfEmployment: 3_000, selfEmployedHealthInsurance: 9_000 });
+      expect(r.selfEmployed.healthDeduction).toBeLessThanOrEqual(3_000);
+    });
+    it("both lower the tax you pay", () => {
+      expect(se({ sepContribution: 5_000, selfEmployedHealthInsurance: 6_000 }).total).toBeLessThan(a.total);
+    });
+  });
+
+  describe("state tax", () => {
+    it("Illinois taxes profit after half the SE tax", () => {
+      check("state tax", se({ stateCode: "IL" }).state, (70_000 - seTax / 2 - 2_925) * 0.0495, 0.01);
+    });
+    it("state QBI doesn't apply: state income ignores the federal 20%", () => {
+      expect(se({ stateCode: "IL" }).state).toBeGreaterThan(0);
+    });
+    it("a state with no income tax adds nothing", () => {
+      check("TX", se({ stateCode: "TX" }).state, 0);
+    });
+  });
+
+  describe("the next dollar and the rate curve follow your 1099 income", () => {
+    it("switches to 1099 income when it's the bigger part", () => {
+      expect(payBasis({ ...base, wages: 60_000, selfEmployment: 10_000 })).toBe("wages");
+      expect(payBasis({ ...base, wages: 10_000, selfEmployment: 30_000 })).toBe("selfEmployment");
+      expect(a.basis).toBe("selfEmployment");
+    });
+    it("counts self-employment tax on the next dollar of profit", () => {
+      // 14.13% self-employment tax, plus 12% federal on 92.9% of it after the
+      // half deduction, after the QBI deduction takes 20% of that.
+      const seRate = 0.153 * 0.9235;
+      const expected = seRate + 0.12 * 0.8 * (1 - seRate / 2);
+      check("total next-dollar rate", a.marginal.total, expected, 0.0005);
+    });
+    it("charts the 1099 income", () => {
+      const curve = taxRateCurve({ ...base, wages: 0, selfEmployment: 70_000 }, 100_000, 100);
+      expect(curve[0].average).toBe(0);
+      expect(curve[70].wages).toBe(70_000);
+      check("marginal at $70,000 of 1099 income", curve[70].marginal, a.marginal.total, 0.0005);
+    });
+  });
+
+  describe("with no 1099 income it changes nothing", () => {
+    it("matches the plain result", () => {
+      const plain = est({});
+      const withZeros = est({ selfEmployment: 0, businessExpenses: 0, selfEmployedHealthInsurance: 0, sepContribution: 0 });
+      check("total", withZeros.total, plain.total, 1e-9);
+      check("quarterly", withZeros.quarterlyEstimate, 0);
+      check("qbi", withZeros.qbiDeduction, 0);
+    });
+  });
+
+  it("stays finite for junk input", () => {
+    const r = est({ selfEmployment: NaN, businessExpenses: NaN, selfEmployedHealthInsurance: NaN, sepContribution: NaN });
+    for (const v of [r.total, r.selfEmploymentTax, r.quarterlyEstimate, r.qbiDeduction, r.takeHome]) {
+      expect(Number.isFinite(v)).toBe(true);
+    }
   });
 });

@@ -10,6 +10,8 @@ import TaxRateChart from "./TaxRateChart";
 import { dollars, pct, rate1 } from "@/lib/format";
 import {
   ADDITIONAL_MEDICARE_THRESHOLD,
+  SE_EARNINGS_FACTOR,
+  SEP_LIMIT,
   estimateIncomeTax,
   taxRateCurve,
 } from "@/lib/incomeTax";
@@ -32,6 +34,7 @@ const SWATCH = {
   payroll: "bg-[#1baf7a] dark:bg-[#199e70]",
   state: "bg-[#eda100] dark:bg-[#c98500]",
   local: "bg-[#e87ba4] dark:bg-[#d55181]",
+  selfEmployment: "bg-[#4a3aa7] dark:bg-[#9085e9]",
 };
 
 const CHART_RANGES = [
@@ -52,6 +55,10 @@ export default function TaxCalculator() {
   const [otherPreTax, setOtherPreTax] = useState(0);
   const [itemized, setItemized] = useState(0);
   const [credits, setCredits] = useState(0);
+  const [selfEmployment, setSelfEmployment] = useState(0);
+  const [businessExpenses, setBusinessExpenses] = useState(0);
+  const [seHealth, setSeHealth] = useState(0);
+  const [sep, setSep] = useState(0);
   const [chartRange, setChartRange] = useState<string | null>(null);
 
   function handleStateChange(code: string) {
@@ -71,14 +78,27 @@ export default function TaxCalculator() {
     otherPreTax,
     itemizedDeductions: itemized,
     credits,
+    selfEmployment,
+    businessExpenses,
+    selfEmployedHealthInsurance: seHealth,
+    sepContribution: sep,
   };
   const e = estimateIncomeTax(inputs);
+  const isSe = e.basis === "selfEmployment";
+  const hasSe = e.selfEmployed.netProfit > 0;
+  const payNoun = isSe ? "1099 income" : "pay";
+  // The pay level where Social Security tax stops: $184,500 of wages, or the
+  // profit that produces $184,500 of self-employment earnings.
+  const capPay = isSe
+    ? Math.max(SOCIAL_SECURITY_WAGE_BASE - wages, 0) / SE_EARNINGS_FACTOR
+    : SOCIAL_SECURITY_WAGE_BASE;
   const stateRule = getState(stateCode);
 
   // Pick a chart range that shows about 25% more pay than yours, unless the
   // person chose one.
+  const chartPay = isSe ? selfEmployment : wages;
   const autoRange =
-    CHART_RANGES.find((r) => Number(r.value) >= wages * 1.25) ??
+    CHART_RANGES.find((r) => Number(r.value) >= chartPay * 1.25) ??
     CHART_RANGES[CHART_RANGES.length - 1];
   const rangeValue = chartRange ?? autoRange.value;
   const maxWages = Number(rangeValue);
@@ -86,7 +106,7 @@ export default function TaxCalculator() {
   const curve = useMemo(
     () => taxRateCurve(inputs, maxWages, 100),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [maxWages, otherIncome, stateCode, localId, localCustomRate, retirement, hsa, otherPreTax, itemized, credits],
+    [maxWages, wages, selfEmployment, businessExpenses, seHealth, sep, otherIncome, stateCode, localId, localCustomRate, retirement, hsa, otherPreTax, itemized, credits],
   );
 
   const parts = [
@@ -115,6 +135,13 @@ export default function TaxCalculator() {
       swatch: SWATCH.payroll,
     },
     {
+      key: "selfEmployment",
+      label: "Self-employment tax (1099)",
+      detail: `Social Security ${dollars(e.selfEmployed.socialSecurity)} · Medicare ${dollars(e.selfEmployed.medicare)}`,
+      amount: e.selfEmploymentTax,
+      swatch: SWATCH.selfEmployment,
+    },
+    {
       key: "state",
       label: stateRule ? `State income tax (${stateRule.code})` : "State income tax",
       detail: !stateRule ? "Pick your state to include it" : undefined,
@@ -128,7 +155,12 @@ export default function TaxCalculator() {
       swatch: SWATCH.local,
       optional: true,
     },
-  ].filter((p) => p.amount > 0.5 || ["keep", "federal", "payroll", "state"].includes(p.key));
+  ].filter(
+    (p) =>
+      p.amount > 0.5 ||
+      ["keep", "federal", "state"].includes(p.key) ||
+      (p.key === "payroll" && !isSe),
+  );
 
   const barParts = parts.filter((p) => p.amount > 0.5);
   const share = (amount: number) => (e.income > 0 ? (amount / e.income) * 100 : 0);
@@ -159,6 +191,19 @@ export default function TaxCalculator() {
       `The ${TAX_YEAR} HSA limit is ${dollars(HSA_LIMIT_FAMILY)} (family coverage), so we counted that much.`,
     );
   }
+  if (hasSe) {
+    notes.push(
+      `Half of your self-employment tax (${dollars(e.selfEmployed.halfDeduction)}) comes off your income before income tax.` +
+        (e.qbiDeduction > 0.5
+          ? ` The 20% business income (QBI) deduction takes another ${dollars(e.qbiDeduction)} off your taxable income.`
+          : ""),
+    );
+  }
+  if (e.selfEmployed.sepCapped) {
+    notes.push(
+      `A SEP-IRA can take up to 20% of your profit (after half of self-employment tax), and no more than ${dollars(SEP_LIMIT)}, so we counted ${dollars(e.selfEmployed.sepDeduction)}. A solo 401(k) can allow more.`,
+    );
+  }
   if (e.wages > SOCIAL_SECURITY_WAGE_BASE) {
     notes.push(
       `Social Security tax stops at ${dollars(SOCIAL_SECURITY_WAGE_BASE)} of pay, so your next dollar is taxed less than the ones before it.`,
@@ -171,11 +216,26 @@ export default function TaxCalculator() {
         <div className="flex min-w-0 flex-col gap-4">
           <NumberField
             id="wages"
-            label="Your yearly pay (before taxes)"
+            label="Your yearly pay from a job (W-2, before taxes)"
             value={wages}
             onChange={setWages}
             prefix="$"
           />
+
+          <div>
+            <NumberField
+              id="selfEmployment"
+              label="Your 1099 income (per year, before expenses)"
+              value={selfEmployment}
+              onChange={setSelfEmployment}
+              prefix="$"
+            />
+            <p className="mt-1.5 text-xs text-foreground/50">
+              Freelance, gig, or contract work. You pay both halves of Social
+              Security and Medicare on it (self-employment tax), and no tax is
+              taken out for you.
+            </p>
+          </div>
 
           <StateSelect value={stateCode} onChange={handleStateChange} hideNote />
           <LocalSelect
@@ -187,6 +247,45 @@ export default function TaxCalculator() {
           />
 
           <Disclosure title="Advanced settings">
+            {selfEmployment > 0 && (
+              <>
+                <NumberField
+                  id="businessExpenses"
+                  label="Business expenses (per year)"
+                  value={businessExpenses}
+                  onChange={setBusinessExpenses}
+                  prefix="$"
+                />
+                <p className="-mt-2 text-xs text-foreground/50">
+                  Supplies, software, mileage, a home office — costs of doing
+                  the work. Only your profit is taxed.
+                </p>
+
+                <NumberField
+                  id="seHealth"
+                  label="Health insurance you pay for yourself (per year)"
+                  value={seHealth}
+                  onChange={setSeHealth}
+                  prefix="$"
+                />
+                <p className="-mt-2 text-xs text-foreground/50">
+                  If you&apos;re self-employed and not covered by a job&apos;s
+                  plan, premiums can come off your income.
+                </p>
+
+                <NumberField
+                  id="sep"
+                  label="SEP-IRA contribution (per year)"
+                  value={sep}
+                  onChange={setSep}
+                  prefix="$"
+                />
+                <p className="-mt-2 text-xs text-foreground/50">
+                  A retirement account for the self-employed. It lowers your
+                  income tax today.
+                </p>
+              </>
+            )}
             <NumberField
               id="otherIncome"
               label="Other taxable income (per year)"
@@ -266,7 +365,7 @@ export default function TaxCalculator() {
         <div className="min-w-0 rounded-lg border border-border bg-surface-hover p-6">
           {!e.hasIncome ? (
             <p className="text-sm text-foreground/60">
-              Enter your yearly pay to see what you might owe in taxes.
+              Enter your yearly pay or 1099 income to see what you might owe in taxes.
             </p>
           ) : (
             <>
@@ -343,6 +442,30 @@ export default function TaxCalculator() {
                 </div>
               </div>
 
+              {hasSe && (
+                <div className="mt-4 rounded-md border border-navy/40 bg-navy/5 p-3 text-sm dark:border-baby-blue/40 dark:bg-baby-blue/10">
+                  <p>
+                    Your 1099 income adds about{" "}
+                    <span className="font-semibold">
+                      {dollars(e.taxFromSelfEmployment)}
+                    </span>{" "}
+                    in tax a year. Nothing is withheld from it, so set aside
+                    about{" "}
+                    <span className="font-semibold text-navy dark:text-baby-blue">
+                      {dollars(e.quarterlyEstimate)} every quarter
+                    </span>{" "}
+                    and pay estimated taxes in April, June, September, and
+                    January.
+                  </p>
+                  <p className="mt-2 text-xs text-foreground/60">
+                    To avoid an underpayment penalty, most people need to have
+                    paid at least 90% of this year&apos;s tax, or 100% of last
+                    year&apos;s (110% if last year&apos;s income was over
+                    $150,000), through withholding and estimated payments.
+                  </p>
+                </div>
+              )}
+
               {notes.length > 0 && (
                 <div className="mt-4 flex flex-col gap-2">
                   {notes.map((n) => (
@@ -373,7 +496,11 @@ export default function TaxCalculator() {
                 <>
                   Your {dollars(e.federalIncome)} of income, minus a{" "}
                   {dollars(e.deduction)}{" "}
-                  {e.usedItemized ? "itemized" : "standard"} deduction, leaves{" "}
+                  {e.usedItemized ? "itemized" : "standard"} deduction
+                  {e.qbiDeduction > 0.5
+                    ? ` and a ${dollars(e.qbiDeduction)} business income (QBI) deduction`
+                    : ""}
+                  , leaves{" "}
                   <span className="font-medium text-foreground">
                     {dollars(e.federalTaxable)}
                   </span>{" "}
@@ -432,13 +559,13 @@ export default function TaxCalculator() {
                 </h2>
                 <p className="mt-1 max-w-xl text-sm text-foreground/60">
                   The dots show where you are now. Hover (or use the arrow
-                  keys) to explore other pay levels, holding your other
-                  settings the same.
+                  keys) to explore other {isSe ? "1099 income" : "pay"} levels,
+                  holding your other settings the same.
                 </p>
               </div>
               <div className="w-full sm:w-64">
                 <span className="text-xs font-medium text-foreground/50">
-                  Show pay up to
+                  Show income up to
                 </span>
                 <Segmented
                   options={CHART_RANGES}
@@ -452,25 +579,40 @@ export default function TaxCalculator() {
               <TaxRateChart
                 curve={curve}
                 maxWages={maxWages}
-                capWages={SOCIAL_SECURITY_WAGE_BASE}
+                capWages={capPay}
+                payNoun={payNoun}
                 current={{
-                  wages: e.wages,
+                  wages: isSe ? e.selfEmployed.grossReceipts : e.wages,
                   average: e.totalRate,
                   marginal: e.marginal.total,
                 }}
               />
               <div className="mt-4 rounded-md border border-yellow/50 bg-yellow/10 p-3 text-sm">
                 <span className="font-medium">
-                  Why the next-dollar rate drops near{" "}
-                  {dollars(SOCIAL_SECURITY_WAGE_BASE)}:
+                  Why the next-dollar rate drops near {dollars(capPay)}:
                 </span>{" "}
-                Social Security tax (6.2%) only applies to the first{" "}
-                {dollars(SOCIAL_SECURITY_WAGE_BASE)} of pay, while Medicare
-                (1.45%) keeps going. Once you pass that point, each extra dollar
-                is taxed about 6 percentage points less. It steps back up at{" "}
-                {dollars(ADDITIONAL_MEDICARE_THRESHOLD)}, when an extra 0.9%
-                Medicare tax starts.
-                {maxWages < SOCIAL_SECURITY_WAGE_BASE &&
+                {isSe ? (
+                  <>
+                    Social Security tax (12.4% for the self-employed)
+                    only applies to the first{" "}
+                    {dollars(SOCIAL_SECURITY_WAGE_BASE)} of earnings, while
+                    Medicare (2.9%) keeps going. Past that point, each extra
+                    dollar of profit is taxed about 11 percentage points less
+                    in self-employment tax. It steps back up when an extra 0.9%
+                    Medicare tax starts at{" "}
+                    {dollars(ADDITIONAL_MEDICARE_THRESHOLD)} of earnings.
+                  </>
+                ) : (
+                  <>
+                    Social Security tax (6.2%) only applies to the first{" "}
+                    {dollars(SOCIAL_SECURITY_WAGE_BASE)} of pay, while Medicare
+                    (1.45%) keeps going. Once you pass that point, each extra
+                    dollar is taxed about 6 percentage points less. It steps
+                    back up at {dollars(ADDITIONAL_MEDICARE_THRESHOLD)}, when an
+                    extra 0.9% Medicare tax starts.
+                  </>
+                )}
+                {maxWages < capPay &&
                   " Choose a bigger range above to see it on the chart."}
               </div>
             </div>
@@ -478,10 +620,12 @@ export default function TaxCalculator() {
 
           <p className="text-xs text-foreground/50">
             An estimate, not tax advice. Federal figures use {TAX_YEAR} rules
-            for a single filer with wages and simple other income. State
+            for a single filer with wages, simple other income, and 1099
+            income with no employees. State
             figures use {TAX_YEAR} rates and standard deductions for a single
-            filer. This doesn&apos;t include self-employment tax, capital
-            gains, the alternative minimum tax, income-based phase-outs, or
+            filer, and treat 1099 profit like other income. This doesn&apos;t
+            include capital gains, the alternative minimum tax, most
+            income-based phase-outs, or
             state payroll programs like disability insurance. City and county
             tax is included only where you answer the question above. Your real
             bill depends on your whole situation, so check with a tax preparer
