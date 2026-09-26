@@ -4,12 +4,15 @@ export default function StateSelect({
   value,
   onChange,
   hideNote = false,
+  helper,
 }: {
   value: string;
   onChange: (code: string) => void;
   // Skip the state's extra note (e.g. "local taxes aren't included") for
   // tools that handle those taxes themselves.
   hideNote?: boolean;
+  // Replaces the text under the dropdown (which is about income tax).
+  helper?: string;
 }) {
   const rule = getState(value);
 
@@ -34,7 +37,9 @@ export default function StateSelect({
         </select>
       </label>
       <p className="mt-1.5 text-xs text-foreground/50">
-        {rule
+        {helper !== undefined
+          ? helper
+          : rule
           ? `${rule.name} ${describeState(rule)}.${
               rule.note && !hideNote ? ` ${rule.note}` : ""
             }`
