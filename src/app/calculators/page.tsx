@@ -1,83 +1,62 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import CalculatorTileImage from "@/components/calculators/CalculatorTileImage";
-import {
-  SinkingFundIcon,
-  CompoundInterestIcon,
-  RetirementIcon,
-  PaycheckIcon,
-  BonusIcon,
-  TaxIcon,
-} from "@/components/calculators/CalculatorIcons";
+import CalculatorsToc from "@/components/calculators/CalculatorsToc";
+import { CALCULATOR_SECTIONS } from "@/lib/calculatorCatalog";
 
 export const metadata: Metadata = {
   title: "Calculators — PennyWisecrack",
 };
 
-const tools = [
-  {
-    href: "/calculators/sinking-fund",
-    title: "Sinking Fund",
-    description: "See how long it'll take to save up for something you want.",
-    icon: SinkingFundIcon,
-  },
-  {
-    href: "/calculators/compound-interest",
-    title: "Compound Interest",
-    description: "Watch how a little savings can grow into a lot over time.",
-    icon: CompoundInterestIcon,
-  },
-  {
-    href: "/calculators/retirement",
-    title: "Retirement",
-    description: "See what starting early could be worth by the time you retire.",
-    icon: RetirementIcon,
-  },
-  {
-    href: "/calculators/paycheck",
-    title: "Paycheck Estimator",
-    description: "Get a rough idea of what a paycheck actually pays you after taxes.",
-    icon: PaycheckIcon,
-  },
-  {
-    href: "/calculators/bonus",
-    title: "Bonus Estimator",
-    description: "See what a one-time bonus really pays after taxes.",
-    icon: BonusIcon,
-  },
-  {
-    href: "/calculators/income-tax",
-    title: "Income Tax",
-    description: "See how much you might pay in taxes, and how your rate changes as you earn more.",
-    icon: TaxIcon,
-  },
-];
-
 export default function Calculators() {
   return (
-    <div className="mx-auto max-w-3xl px-6 py-16">
+    <div className="mx-auto max-w-3xl px-6 pb-10 pt-16">
       <h1 className="text-3xl font-semibold tracking-tight text-navy dark:text-baby-blue">
         Calculators
       </h1>
       <p className="mt-4 text-foreground/70">
-        Simple tools to help you see what your money can actually do.
+        Simple tools to help you see what your money can actually do. Pick the
+        question you&apos;re asking.
       </p>
 
-      <div className="mt-10 grid gap-6 sm:grid-cols-2">
-        {tools.map((tool) => (
-          <Link
-            key={tool.href}
-            href={tool.href}
-            className="block overflow-hidden rounded-lg border border-border transition-colors hover:border-baby-blue"
+      <CalculatorsToc
+        sections={CALCULATOR_SECTIONS.map((s) => ({ id: s.id, label: s.label }))}
+      />
+
+      <div className="mt-10 flex flex-col gap-14">
+        {CALCULATOR_SECTIONS.map((section) => (
+          <section
+            key={section.id}
+            id={section.id}
+            aria-labelledby={`${section.id}-heading`}
+            className="scroll-mt-20"
           >
-            <CalculatorTileImage icon={tool.icon} className="h-28 w-full" />
-            <div className="p-6">
-              <h2 className="font-medium">{tool.title}</h2>
-              <p className="mt-2 text-sm text-foreground/60">
-                {tool.description}
-              </p>
+            <h2
+              id={`${section.id}-heading`}
+              className="text-xl font-semibold tracking-tight text-navy dark:text-baby-blue"
+            >
+              {section.title}
+            </h2>
+            <p className="mt-1 text-sm text-foreground/60">{section.blurb}</p>
+
+            <div className="mt-5 grid gap-6 sm:grid-cols-2">
+              {section.tools.map((tool) => (
+                <Link
+                  key={tool.href}
+                  href={tool.href}
+                  className="block overflow-hidden rounded-lg border border-border transition-colors hover:border-baby-blue"
+                >
+                  <CalculatorTileImage icon={tool.icon} className="h-28 w-full" />
+                  <div className="p-6">
+                    <h3 className="font-medium">{tool.title}</h3>
+                    <p className="mt-2 text-sm text-foreground/60">
+                      {tool.description}
+                    </p>
+                  </div>
+                </Link>
+              ))}
             </div>
-          </Link>
+          </section>
         ))}
       </div>
     </div>
