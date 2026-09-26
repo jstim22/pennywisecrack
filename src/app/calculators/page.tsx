@@ -7,6 +7,7 @@ import {
   RetirementIcon,
   PaycheckIcon,
   BonusIcon,
+  TaxIcon,
 } from "@/components/calculators/CalculatorIcons";
 
 export const metadata: Metadata = {
@@ -43,6 +44,12 @@ const tools = [
     title: "Bonus Estimator",
     description: "See what a one-time bonus really pays after taxes.",
     icon: BonusIcon,
+  },
+  {
+    href: "/calculators/income-tax",
+    title: "Income Tax",
+    description: "See how much you might pay in taxes, and how your rate changes as you earn more.",
+    icon: TaxIcon,
   },
 ];
 

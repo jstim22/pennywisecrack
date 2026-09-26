@@ -16,7 +16,7 @@ export const HSA_LIMIT_FAMILY = 8_750;
 export const OVERTIME_THRESHOLD_HOURS = 40;
 export const OVERTIME_MULTIPLIER = 1.5;
 
-const FEDERAL_BRACKETS = [
+export const FEDERAL_BRACKETS = [
   { upTo: 12_400, rate: 0.1 },
   { upTo: 50_400, rate: 0.12 },
   { upTo: 105_700, rate: 0.22 },
@@ -69,15 +69,29 @@ export type PaycheckInputs = {
   skipFica: boolean;
 };
 
-export function federalIncomeTax(annualTaxableWages: number) {
-  const taxable = Math.max(annualTaxableWages - STANDARD_DEDUCTION, 0);
-  let tax = 0;
+// Federal income tax on `annualTaxableWages` after subtracting a deduction
+// (the standard deduction unless told otherwise).
+export function federalIncomeTax(
+  annualTaxableWages: number,
+  deduction = STANDARD_DEDUCTION,
+) {
+  return federalBracketBreakdown(annualTaxableWages - deduction).reduce(
+    (sum, row) => sum + row.tax,
+    0,
+  );
+}
+
+// How much of `taxableIncome` (income after deductions) lands in each federal
+// bracket, and the tax that produces.
+export function federalBracketBreakdown(taxableIncome: number) {
+  const taxable = Math.max(taxableIncome, 0);
   let lower = 0;
-  for (const { upTo, rate } of FEDERAL_BRACKETS) {
-    if (taxable > lower) tax += (Math.min(taxable, upTo) - lower) * rate;
+  return FEDERAL_BRACKETS.map(({ upTo, rate }) => {
+    const inBracket = Math.max(Math.min(taxable, upTo) - lower, 0);
+    const row = { from: lower, upTo, rate, inBracket, tax: inBracket * rate };
     lower = upTo;
-  }
-  return tax;
+    return row;
+  });
 }
 
 function clamp(n: number, min: number, max: number) {

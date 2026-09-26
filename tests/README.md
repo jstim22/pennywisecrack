@@ -16,9 +16,10 @@ The suite uses [Vitest](https://vitest.dev) with React Testing Library (see `vit
 | `lib/paycheckTax.test.ts` | Federal brackets, FICA, 401(k)/HSA/insurance treatment, hourly/overtime/tips, and a **real pay stub** (OASDI $168.08, Medicare $39.31, federal $256.80) |
 | `lib/bonusTax.test.ts` | Flat 22% and combined-paycheck withholding, the $1M rule, Social Security cap, Additional Medicare, 401(k) on a bonus, state override, Maryland counties, NYC / Yonkers, Philadelphia, enter-your-own local rates |
 | `lib/stateTax.test.ts` | Sanity checks across **all 51 states**: tax never negative or falling as income rises, no-tax states are zero, every city/county option has a rate, and the bonus estimator stays finite for every state + local option |
+| `lib/incomeTax.test.ts` | The yearly income-tax engine: hand-computed federal/FICA/state/local tax, bracket breakdown, 401(k)/HSA/itemized/credits, the Social Security cap and Additional Medicare, marginal rates and the rate curve, and that it **matches the paycheck estimator** (including the real pay stub) across six scenarios |
 | `lib/sinkingFund.test.ts` | Time to goal for each saving frequency, high-yield savings compounding (APY, monthly), equivalents, duration wording |
 | `lib/growth.test.ts` | The shared growth engine behind Retirement and Compound Interest: pinned numbers for both calculators' defaults and each advanced setting, lump sums, glide path, Monte Carlo ordering |
-| `components/calculators.test.tsx` | Each calculator rendered like a visitor sees it: default numbers, key interactions (state and county pickers, frequency switch, lump sums, customize by year), and messages for edge cases |
+| `components/calculators.test.tsx` | Each calculator rendered like a visitor sees it (all six): default numbers, key interactions (state and county pickers, frequency switch, lump sums, customize by year), and messages for edge cases |
 | `site.test.ts` | Every calculator route has a page and a tile on the calculators page |
 
 The `check("name", actual, expected)` helper in `helpers.ts` compares numbers to within half a cent unless a looser tolerance is passed.
@@ -34,7 +35,7 @@ Yearly update checklist: `TAX_YEAR`, standard deduction, brackets, Social Securi
 
 - Layout at phone width (375px): no sideways scrolling, controls not cut off.
 - Dark mode and the accessibility widget (text size, contrast, motion settings).
-- The retirement chart's labels and milestones, and the compound-interest bars.
+- The retirement chart's labels and milestones, the compound-interest bars, and the income-tax rate chart (hover tooltip, colors in light and dark).
 - The blog and the homepage "recent posts" ribbon.
 - Target dates ("around <date>") on the Sinking Fund page, since they depend on today's date.
 

@@ -5,6 +5,7 @@ import CompoundInterestCalculator from "@/components/calculators/CompoundInteres
 import PaycheckCalculator from "@/components/calculators/PaycheckCalculator";
 import RetirementCalculator from "@/components/calculators/RetirementCalculator";
 import SinkingFundCalculator from "@/components/calculators/SinkingFundCalculator";
+import TaxCalculator from "@/components/calculators/TaxCalculator";
 
 // These render each calculator the way a visitor sees it and check the
 // numbers on screen, so they catch wiring mistakes the engine tests can't.
@@ -251,5 +252,117 @@ describe("Retirement Calculator", () => {
     render(<RetirementCalculator />);
     type("retireAge", "10");
     expect(text()).toContain("Set a retirement age older than your current age");
+  });
+});
+
+describe("Income Tax Calculator", () => {
+  it("opens on $60,000 of pay with no state", () => {
+    render(<TaxCalculator />);
+    expect(text()).toContain("you could pay about$9,610");
+    expect(text()).toContain("16.0% of your $60,000 income");
+    expect(text()).toContain("You'd keep about $50,390 ($4,199 a month)");
+    expect(text()).toContain("Federal income tax$5,020");
+    expect(text()).toContain("Social Security $3,720 · Medicare $870");
+    expect(text()).toContain("Pick your state to include it");
+    expect(text()).toContain("Next dollar19.7%");
+  });
+
+  it("adds state tax", () => {
+    render(<TaxCalculator />);
+    pick("state", "IL");
+    expect(text()).toContain("State income tax (IL)$2,825");
+    expect(text()).toContain("Next dollar24.6%");
+  });
+
+  it("asks which county in Maryland and adds that county's tax", () => {
+    render(<TaxCalculator />);
+    pick("state", "MD");
+    pick("local", "baltimore-city");
+    expect(text()).toContain("Local income tax (Baltimore City)$1,710");
+    pick("state", "TX");
+    expect(document.getElementById("local")).toBeNull();
+    expect(text()).not.toContain("Local income tax");
+  });
+
+  it("shows how each federal bracket adds up", () => {
+    render(<TaxCalculator />);
+    expect(text()).toContain("leaves $43,900 to be taxed");
+    expect(text()).toContain("$12,400$1,240");
+    expect(text()).toContain("$31,500$3,780");
+    expect(text()).toContain("Federal income tax$5,020");
+  });
+
+  it("lowers federal tax with a traditional 401(k), but not Social Security", () => {
+    render(<TaxCalculator />);
+    type("retirement", "6000");
+    expect(text()).toContain("Federal income tax$4,300");
+    expect(text()).toContain("Social Security $3,720");
+    expect(text()).toContain("Savings & benefits");
+  });
+
+  it("uses itemized deductions when they beat the standard one", () => {
+    render(<TaxCalculator />);
+    type("itemized", "20000");
+    expect(text()).toContain("Federal income tax$4,552");
+    expect(text()).toContain("bigger than the standard deduction");
+  });
+
+  it("applies credits and says when some go unused", () => {
+    render(<TaxCalculator />);
+    type("credits", "1000");
+    expect(text()).toContain("Federal income tax$4,020");
+    type("credits", "6000");
+    expect(text()).toContain("Federal income tax$0");
+    expect(text()).toContain("$980 of them goes unused");
+  });
+
+  it("explains the Social Security cap for high earners", () => {
+    render(<TaxCalculator />);
+    type("wages", "250000");
+    expect(text()).toContain("Social Security tax stops at $184,500");
+    expect(text()).toContain("Medicare $4,075"); // 1.45% plus 0.9% over $200,000
+  });
+
+  it("says when income is under the deduction", () => {
+    render(<TaxCalculator />);
+    type("wages", "10000");
+    expect(text()).toContain("likely owe no federal income tax");
+  });
+
+  it("asks for pay when there is none", () => {
+    render(<TaxCalculator />);
+    type("wages", "0");
+    expect(text()).toContain("Enter your yearly pay");
+    expect(document.querySelector('svg[role="img"]')).toBeNull();
+  });
+
+  it("draws the rate chart, with a table of the same numbers", () => {
+    render(<TaxCalculator />);
+    const chart = document.querySelector('svg[role="img"]')!;
+    expect(chart.getAttribute("aria-label")).toContain("$100,000");
+    expect(document.querySelectorAll("details table tbody tr")).toHaveLength(11);
+    click("$500k");
+    expect(
+      document.querySelector('svg[role="img"]')!.getAttribute("aria-label"),
+    ).toContain("$500,000");
+  });
+
+  it("explains the Social Security cap dip, and marks it once the range reaches it", () => {
+    render(<TaxCalculator />);
+    expect(text()).toContain("Why the next-dollar rate drops near $184,500");
+    expect(text()).toContain("extra 0.9% Medicare tax starts");
+    expect(text()).toContain("Choose a bigger range above");
+    expect(text()).not.toContain("Social Security cap");
+    click("$250k");
+    expect(text()).toContain("Social Security cap");
+    expect(text()).not.toContain("Choose a bigger range above");
+  });
+
+  it("shows a readout when you move along the chart with the keyboard", () => {
+    render(<TaxCalculator />);
+    const chart = document.querySelector('svg[role="img"]')!;
+    fireEvent.focus(chart);
+    fireEvent.keyDown(chart, { key: "ArrowRight" });
+    expect(text()).toMatch(/\$\d[\d,]* of pay\d+\.\d%average/);
   });
 });

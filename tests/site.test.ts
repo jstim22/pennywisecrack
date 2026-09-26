@@ -9,9 +9,9 @@ describe("calculator routes", () => {
     .filter((d) => d.isDirectory())
     .map((d) => d.name);
 
-  it("has the five calculators", () => {
+  it("has the six calculators", () => {
     expect(routes.sort()).toEqual(
-      ["bonus", "compound-interest", "paycheck", "retirement", "sinking-fund"],
+      ["bonus", "compound-interest", "income-tax", "paycheck", "retirement", "sinking-fund"],
     );
   });
 

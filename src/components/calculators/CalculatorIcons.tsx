@@ -87,3 +87,20 @@ export function PaycheckIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+export function TaxIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M6 3h9l4 4v14H6V3z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path d="M15 3v4h4" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M9 17l6-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="9.5" cy="11.5" r="1" fill="currentColor" />
+      <circle cx="14.5" cy="16.5" r="1" fill="currentColor" />
+    </svg>
+  );
+}

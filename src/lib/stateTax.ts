@@ -616,6 +616,39 @@ export function stateIncomeTax(code: string, taxableWages: number) {
   return Math.max(bracketTax(rule.brackets, taxable) - rule.credit, 0);
 }
 
+// Yearly city/county income tax for the person's answer to the state's local
+// question ("" = not answered). `wages` is gross pay (what wage-based local
+// taxes use); `stateWages` is pay after the deductions the state allows (what
+// Maryland counties and NYC start from).
+export function localIncomeTax(
+  stateCode: string,
+  localId: string,
+  customRatePct: number,
+  wages: number,
+  stateWages: number,
+) {
+  const state = BY_CODE.get(stateCode);
+  const option = state?.local?.options.find((o) => o.id === localId);
+  if (!state || !option) return { tax: 0, name: undefined };
+
+  const rate = Number.isFinite(customRatePct)
+    ? Math.min(Math.max(customRatePct, 0), 20)
+    : 0;
+  const brackets: Bracket[] = option.custom ? [[0, rate]] : option.brackets;
+  const base =
+    option.base === "stateTaxable"
+      ? Math.max(stateWages - state.deduction, 0)
+      : wages;
+  const tax =
+    bracketTax(brackets, base) +
+    ((option.pctOfStateTax ?? 0) / 100) * stateIncomeTax(stateCode, stateWages);
+  return {
+    tax,
+    // Short name for result rows; undefined when the person typed their own rate.
+    name: option.custom ? undefined : (option.name ?? option.label),
+  };
+}
+
 // Tax on `taxable` using [income over, marginal rate %] brackets.
 export function bracketTax(brackets: Bracket[], taxable: number) {
   let tax = 0;
