@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import NumberField from "./NumberField";
 import Segmented from "./Segmented";
 import Disclosure from "./Disclosure";
+import useToday from "./useToday";
 import { usd } from "@/lib/format";
 import {
   CONTRIBUTION_FREQUENCIES,
@@ -21,24 +22,6 @@ const AMOUNT_LABELS: Record<ContributionFrequency, string> = {
   monthly: "How much can you save per month?",
   yearly: "How much can you save per year?",
 };
-
-// Today's date (local midnight), or null while rendering on the server, so the
-// "around <date>" text only appears once we know the visitor's real date.
-function subscribeToNothing() {
-  return () => {};
-}
-function todayTimestamp() {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-}
-function useToday() {
-  const timestamp = useSyncExternalStore(
-    subscribeToNothing,
-    todayTimestamp,
-    () => null,
-  );
-  return timestamp === null ? null : new Date(timestamp);
-}
 
 export default function SinkingFundCalculator() {
   const [goal, setGoal] = useState(150);

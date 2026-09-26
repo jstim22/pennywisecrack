@@ -104,3 +104,80 @@ export function TaxIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+export function DebtPayoffIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M4 5h5v5H4zM9 10h5v5H9zM14 15h6v5h-6z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path d="M13 5h7M17 3l3 2-3 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function StudentLoanIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="M2 9l10-5 10 5-10 5L2 9z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M6 11.5V16c0 1.5 3 3 6 3s6-1.5 6-3v-4.5" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M22 9v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function MortgageIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="M3 11l9-7 9 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M5.5 10v9.5h13V10" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M10 19.5v-5h4v5" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function CarIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="M4 15v-3l2-5h12l2 5v3" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M3 15h18v3H3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M4 12h16" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="7.5" cy="18" r="1.6" fill="currentColor" />
+      <circle cx="16.5" cy="18" r="1.6" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function OpportunityCostIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="M12 4v16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M5 8h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M5 8l-2.5 6a3 3 0 005 0L5 8zM19 8l-2.5 6a3 3 0 005 0L19 8z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M8.5 20h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function BudgetIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <rect x="4" y="4" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="13" y="4" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="4" y="13" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="13" y="13" width="7" height="7" rx="1" fill="currentColor" opacity="0.5" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+export function NetWorthIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M13 8l3-3 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
