@@ -15,11 +15,13 @@ export default function CurrencyInput({
   value,
   onChange,
   className,
+  ariaLabel,
 }: {
   id?: string;
   value: number;
   onChange: (value: number) => void;
   className?: string;
+  ariaLabel?: string;
 }) {
   const [focused, setFocused] = useState(false);
   const [rawText, setRawText] = useState("");
@@ -35,6 +37,7 @@ export default function CurrencyInput({
     <input
       ref={inputRef}
       id={id}
+      aria-label={ariaLabel}
       type="text"
       inputMode="decimal"
       value={displayValue}

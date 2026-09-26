@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import SavingsGoalCalculator from "@/components/calculators/SavingsGoalCalculator";
+import SinkingFundCalculator from "@/components/calculators/SinkingFundCalculator";
 
 export const metadata: Metadata = {
-  title: "Savings Goal Calculator — PennyWisecrack",
+  title: "Sinking Fund Calculator — PennyWisecrack",
 };
 
-export default function SavingsGoalPage() {
+export default function SinkingFundPage() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-16">
       <Link
@@ -16,15 +16,16 @@ export default function SavingsGoalPage() {
         ← All calculators
       </Link>
       <h1 className="mt-4 text-3xl font-semibold tracking-tight text-navy dark:text-baby-blue">
-        Savings Goal Calculator
+        Sinking Fund Calculator
       </h1>
       <p className="mt-2 text-foreground/70">
-        Figure out how long it&apos;ll take to save up for something you
-        want.
+        A sinking fund is money you set aside a little at a time for
+        something you know you&apos;ll need or want. Figure out how long it&apos;ll
+        take to fill yours.
       </p>
 
       <div className="mt-10">
-        <SavingsGoalCalculator />
+        <SinkingFundCalculator />
       </div>
     </div>
   );

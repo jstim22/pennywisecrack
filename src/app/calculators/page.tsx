@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import CalculatorTileImage from "@/components/calculators/CalculatorTileImage";
 import {
-  SavingsGoalIcon,
+  SinkingFundIcon,
   CompoundInterestIcon,
   RetirementIcon,
   PaycheckIcon,
+  BonusIcon,
 } from "@/components/calculators/CalculatorIcons";
 
 export const metadata: Metadata = {
@@ -14,10 +15,10 @@ export const metadata: Metadata = {
 
 const tools = [
   {
-    href: "/calculators/savings-goal",
-    title: "Savings Goal",
+    href: "/calculators/sinking-fund",
+    title: "Sinking Fund",
     description: "See how long it'll take to save up for something you want.",
-    icon: SavingsGoalIcon,
+    icon: SinkingFundIcon,
   },
   {
     href: "/calculators/compound-interest",
@@ -34,8 +35,14 @@ const tools = [
   {
     href: "/calculators/paycheck",
     title: "Paycheck Estimator",
-    description: "Get a rough idea of what a part-time job actually pays you.",
+    description: "Get a rough idea of what a paycheck actually pays you after taxes.",
     icon: PaycheckIcon,
+  },
+  {
+    href: "/calculators/bonus",
+    title: "Bonus Estimator",
+    description: "See what a one-time bonus really pays after taxes.",
+    icon: BonusIcon,
   },
 ];
 

@@ -12,8 +12,8 @@ export default function About() {
       </h1>
       <p className="mt-4 text-foreground/70">
         This page will tell the PennyWisecrack story — who we are, why we
-        started this, and why we think teens deserve real money skills
-        before they're out on their own.
+        started this, and why we think everyone deserves real money skills,
+        no matter where they&apos;re starting from.
       </p>
     </div>
   );

@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import PaycheckCalculator from "@/components/calculators/PaycheckCalculator";
+import BonusCalculator from "@/components/calculators/BonusCalculator";
 
 export const metadata: Metadata = {
-  title: "Paycheck Estimator — PennyWisecrack",
+  title: "Bonus Estimator — PennyWisecrack",
 };
 
-export default function PaycheckPage() {
+export default function BonusPage() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-16">
       <Link
@@ -16,14 +16,14 @@ export default function PaycheckPage() {
         ← All calculators
       </Link>
       <h1 className="mt-4 text-3xl font-semibold tracking-tight text-navy dark:text-baby-blue">
-        Paycheck Estimator
+        Bonus Estimator
       </h1>
       <p className="mt-2 text-foreground/70">
-        Get a rough idea of what a paycheck actually pays you after taxes.
+        See what a one-time bonus really pays after taxes.
       </p>
 
       <div className="mt-10">
-        <PaycheckCalculator />
+        <BonusCalculator />
       </div>
     </div>
   );

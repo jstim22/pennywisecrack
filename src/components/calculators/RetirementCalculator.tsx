@@ -2,20 +2,24 @@
 
 import { useMemo, useState } from "react";
 import NumberField from "./NumberField";
-import CurrencyInput from "./CurrencyInput";
-import PlainNumberInput from "./PlainNumberInput";
 import RetirementChart from "./RetirementChart";
-
-type Frequency = "monthly" | "yearly";
-type YearOverride = { contribution?: number; rate?: number };
-
-const GLIDE_WINDOW_YEARS = 15;
-const GLIDE_FLOOR_RATE = 4;
-const MONTE_CARLO_TRIALS = 300;
-// Long-run annualized volatility (standard deviation of yearly returns) for
-// a stock-heavy portfolio — a widely-cited, publicly available figure, not
-// tied to any specific firm's proprietary assumptions.
-const ANNUAL_VOLATILITY_PCT = 15;
+import Disclosure from "./Disclosure";
+import CheckRow from "./CheckRow";
+import LumpSumsField from "./LumpSumsField";
+import YearlySchedule from "./YearlySchedule";
+import MonteCarloResults from "./MonteCarloResults";
+import { money } from "@/lib/format";
+import {
+  ANNUAL_VOLATILITY_PCT,
+  GLIDE_WINDOW_YEARS,
+  MONTE_CARLO_TRIALS,
+  lumpSumsByMonth as toLumpSumsByMonth,
+  runMonteCarlo,
+  simulate,
+  type Frequency,
+  type LumpSum,
+  type YearOverride,
+} from "@/lib/growth";
 
 function extraMonthlyForTarget({
   target,
@@ -23,204 +27,28 @@ function extraMonthlyForTarget({
   monthlyRatePct,
   principal,
   currentMonthly,
+  lumpSumsByMonth,
 }: {
   target: number;
   months: number;
   monthlyRatePct: number;
   principal: number;
   currentMonthly: number;
+  lumpSumsByMonth: Record<number, number>;
 }) {
   if (months <= 0) return 0;
   const r = monthlyRatePct / 100 / 12;
+  // What the planned lump sums will be worth by retirement.
+  const lumpSumValue = Object.entries(lumpSumsByMonth).reduce(
+    (sum, [m, amount]) => sum + amount * Math.pow(1 + r, months - Number(m)),
+    0,
+  );
   const requiredMonthly =
     r === 0
-      ? (target - principal) / months
-      : (target - principal * Math.pow(1 + r, months)) /
+      ? (target - principal - lumpSumValue) / months
+      : (target - lumpSumValue - principal * Math.pow(1 + r, months)) /
         ((Math.pow(1 + r, months) - 1) / r);
   return requiredMonthly - currentMonthly;
-}
-
-function glideAdjustedRate(
-  rate: number,
-  yearIndex: number,
-  totalYears: number,
-) {
-  const floor = Math.min(GLIDE_FLOOR_RATE, rate);
-  const window = Math.min(GLIDE_WINDOW_YEARS, totalYears);
-  if (window <= 0) return rate;
-  const yearsRemaining = totalYears - yearIndex;
-  if (yearsRemaining >= window) return rate;
-  const t = Math.max(yearsRemaining, 0) / window;
-  return floor + (rate - floor) * t;
-}
-
-type SimulateParams = {
-  months: number;
-  principal: number;
-  currentAge: number;
-  frequency: Frequency;
-  baseContribution: number;
-  baseRate: number;
-  customSchedule: boolean;
-  getYearContribution: (yearIndex: number) => number;
-  getYearRate: (yearIndex: number) => number;
-  contributionGrowthPct: number;
-  glidePath: boolean;
-};
-
-function simulate({
-  months,
-  principal,
-  currentAge,
-  frequency,
-  baseContribution,
-  baseRate,
-  customSchedule,
-  getYearContribution,
-  getYearRate,
-  contributionGrowthPct,
-  glidePath,
-}: SimulateParams) {
-  let balance = principal;
-  let contributed = principal;
-  const yearly: { age: number; balance: number }[] = [];
-  const totalYears = months / 12;
-
-  for (let m = 1; m <= months; m++) {
-    const yearIndex = Math.ceil(m / 12);
-
-    let yearRate = customSchedule ? getYearRate(yearIndex) : baseRate;
-    if (glidePath) {
-      yearRate = glideAdjustedRate(yearRate, yearIndex, totalYears);
-    }
-
-    let yearContribution = customSchedule
-      ? getYearContribution(yearIndex)
-      : baseContribution;
-    if (contributionGrowthPct) {
-      yearContribution *= Math.pow(
-        1 + contributionGrowthPct / 100,
-        yearIndex - 1,
-      );
-    }
-
-    const monthlyRate = yearRate / 100 / 12;
-    balance *= 1 + monthlyRate;
-    if (frequency === "monthly") {
-      balance += yearContribution;
-      contributed += yearContribution;
-    } else if (m % 12 === 0) {
-      balance += yearContribution;
-      contributed += yearContribution;
-    }
-    if (m % 12 === 0) {
-      yearly.push({ age: currentAge + m / 12, balance });
-    }
-  }
-
-  return {
-    yearly,
-    balance,
-    contributed,
-    growth: Math.max(balance - contributed, 0),
-  };
-}
-
-function randomNormal(mean: number, stddev: number) {
-  let u = 0;
-  let v = 0;
-  while (u === 0) u = Math.random();
-  while (v === 0) v = Math.random();
-  const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-  return mean + z * stddev;
-}
-
-type MonteCarloParams = Omit<SimulateParams, "currentAge">;
-
-function runMonteCarloTrial(params: MonteCarloParams) {
-  const {
-    months,
-    principal,
-    frequency,
-    baseContribution,
-    baseRate,
-    customSchedule,
-    getYearContribution,
-    getYearRate,
-    contributionGrowthPct,
-    glidePath,
-  } = params;
-
-  let balance = principal;
-  const totalYears = months / 12;
-  const monthlyVolatility = ANNUAL_VOLATILITY_PCT / 100 / Math.sqrt(12);
-
-  for (let m = 1; m <= months; m++) {
-    const yearIndex = Math.ceil(m / 12);
-
-    let yearRate = customSchedule ? getYearRate(yearIndex) : baseRate;
-    if (glidePath) {
-      yearRate = glideAdjustedRate(yearRate, yearIndex, totalYears);
-    }
-
-    let yearContribution = customSchedule
-      ? getYearContribution(yearIndex)
-      : baseContribution;
-    if (contributionGrowthPct) {
-      yearContribution *= Math.pow(
-        1 + contributionGrowthPct / 100,
-        yearIndex - 1,
-      );
-    }
-
-    const meanMonthlyReturn = yearRate / 100 / 12;
-    const monthlyReturn = randomNormal(meanMonthlyReturn, monthlyVolatility);
-
-    balance = Math.max(balance * (1 + monthlyReturn), 0);
-    if (frequency === "monthly") {
-      balance += yearContribution;
-    } else if (m % 12 === 0) {
-      balance += yearContribution;
-    }
-  }
-
-  return balance;
-}
-
-function runMonteCarlo(params: MonteCarloParams) {
-  const results: number[] = [];
-  for (let t = 0; t < MONTE_CARLO_TRIALS; t++) {
-    results.push(runMonteCarloTrial(params));
-  }
-  results.sort((a, b) => a - b);
-  const percentile = (p: number) =>
-    results[Math.floor(p * (results.length - 1))];
-  return {
-    p10: percentile(0.1),
-    p50: percentile(0.5),
-    p90: percentile(0.9),
-  };
-}
-
-function ChevronIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <path d="M6 9l6 6 6-6" />
-    </svg>
-  );
-}
-
-function money(n: number) {
-  return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
 
 export default function RetirementCalculator() {
@@ -234,6 +62,8 @@ export default function RetirementCalculator() {
   const [yearOverrides, setYearOverrides] = useState<
     Record<number, YearOverride>
   >({});
+
+  const [lumpSums, setLumpSums] = useState<LumpSum[]>([]);
 
   const [contributionGrowth, setContributionGrowth] = useState(0);
   const [glidePath, setGlidePath] = useState(false);
@@ -265,12 +95,16 @@ export default function RetirementCalculator() {
     }));
   }
 
+  const lumpSumsByMonth = useMemo(
+    () => toLumpSumsByMonth(lumpSums, (age) => age - currentAge, monthsToGrow),
+    [lumpSums, currentAge, monthsToGrow],
+  );
+
   const data = useMemo(
     () =>
       simulate({
         months: monthsToGrow,
         principal: currentInvested,
-        currentAge,
         frequency,
         baseContribution: contribution,
         baseRate: rate,
@@ -279,6 +113,7 @@ export default function RetirementCalculator() {
         getYearRate,
         contributionGrowthPct: contributionGrowth,
         glidePath,
+        lumpSumsByMonth,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
@@ -292,6 +127,7 @@ export default function RetirementCalculator() {
       yearOverrides,
       contributionGrowth,
       glidePath,
+      lumpSumsByMonth,
     ],
   );
 
@@ -308,6 +144,7 @@ export default function RetirementCalculator() {
       getYearRate,
       contributionGrowthPct: contributionGrowth,
       glidePath,
+      lumpSumsByMonth,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -321,6 +158,7 @@ export default function RetirementCalculator() {
     yearOverrides,
     contributionGrowth,
     glidePath,
+    lumpSumsByMonth,
   ]);
 
   const inflationAdjustedBalance = inflationAdjust
@@ -328,6 +166,10 @@ export default function RetirementCalculator() {
     : null;
 
   const years = Array.from({ length: yearsToGrow }, (_, i) => i + 1);
+  const chartData = data.yearly.map((y) => ({
+    age: currentAge + y.year,
+    balance: y.balance,
+  }));
   const hasExtraAdjustments = contributionGrowth > 0 || glidePath;
 
   return (
@@ -356,7 +198,7 @@ export default function RetirementCalculator() {
 
             {data.yearly.length > 0 && (
               <div className="mt-4">
-                <RetirementChart data={data.yearly} />
+                <RetirementChart data={chartData} />
               </div>
             )}
           </>
@@ -436,155 +278,95 @@ export default function RetirementCalculator() {
             prefix="$"
           />
 
-          <details className="group rounded-md border border-border">
-            <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-medium">
-              Advanced settings
-              <ChevronIcon className="h-4 w-4 text-foreground/50 transition-transform group-open:rotate-180" />
-            </summary>
+          <Disclosure title="Advanced settings">
+            <NumberField
+              id="rate"
+              label="Expected annual return"
+              value={rate}
+              onChange={setRate}
+              suffix="%"
+              step={0.1}
+            />
 
-            <div className="flex flex-col gap-4 border-t border-border px-3 py-4">
+            <div>
               <NumberField
-                id="rate"
-                label="Expected annual return"
-                value={rate}
-                onChange={setRate}
+                id="contributionGrowth"
+                label="Increase my contribution by each year"
+                value={contributionGrowth}
+                onChange={setContributionGrowth}
                 suffix="%"
                 step={0.1}
               />
+              <p className="mt-1.5 text-xs text-foreground/50">
+                1%–2% a year is normal — think of it like a raise keeping pace
+                with your contributions.
+              </p>
+            </div>
 
-              <div>
-                <NumberField
-                  id="contributionGrowth"
-                  label="Increase my contribution by each year"
-                  value={contributionGrowth}
-                  onChange={setContributionGrowth}
-                  suffix="%"
-                  step={0.1}
-                />
-                <p className="mt-1.5 text-xs text-foreground/50">
-                  1%–2% a year is normal — think of it like a raise keeping
-                  pace with your contributions.
-                </p>
-              </div>
+            <CheckRow
+              label="Glide path"
+              description={`Your return rate gradually drops over the last ${GLIDE_WINDOW_YEARS} years before retirement, like shifting from stocks into safer bonds.`}
+              checked={glidePath}
+              onChange={setGlidePath}
+            />
 
-              <label className="flex items-start justify-between gap-3 text-sm font-medium text-foreground/80">
-                <span>
-                  Glide path
-                  <span className="mt-0.5 block text-xs font-normal text-foreground/50">
-                    Your return rate gradually drops over the last{" "}
-                    {GLIDE_WINDOW_YEARS} years before retirement, like
-                    shifting from stocks into safer bonds.
-                  </span>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={glidePath}
-                  onChange={(e) => setGlidePath(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 shrink-0 accent-navy dark:accent-baby-blue"
-                />
-              </label>
-
-              <div>
-                <label className="flex items-center justify-between text-sm font-medium text-foreground/80">
-                  Adjust for inflation
-                  <input
-                    type="checkbox"
-                    checked={inflationAdjust}
-                    onChange={(e) => setInflationAdjust(e.target.checked)}
-                    className="h-4 w-4 accent-navy dark:accent-baby-blue"
+            <div>
+              <CheckRow
+                label="Adjust for inflation"
+                checked={inflationAdjust}
+                onChange={setInflationAdjust}
+              />
+              {inflationAdjust && (
+                <div className="mt-2">
+                  <NumberField
+                    id="inflationRate"
+                    label="Inflation rate"
+                    value={inflationRate}
+                    onChange={setInflationRate}
+                    suffix="%"
+                    step={0.05}
                   />
-                </label>
-                {inflationAdjust && (
-                  <div className="mt-2">
-                    <NumberField
-                      id="inflationRate"
-                      label="Inflation rate"
-                      value={inflationRate}
-                      onChange={setInflationRate}
-                      suffix="%"
-                      step={0.05}
-                    />
-                  </div>
-                )}
-              </div>
-
-              <label className="flex items-start justify-between gap-3 text-sm font-medium text-foreground/80">
-                <span>
-                  Monte Carlo scenarios
-                  <span className="mt-0.5 block text-xs font-normal text-foreground/50">
-                    Runs {MONTE_CARLO_TRIALS} randomized market simulations
-                    (assuming {ANNUAL_VOLATILITY_PCT}% annual volatility) and
-                    shows the 10th, 50th, and 90th percentile outcomes — the
-                    same percentile-based approach real retirement planning
-                    tools use.
-                  </span>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={monteCarlo}
-                  onChange={(e) => setMonteCarlo(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 shrink-0 accent-navy dark:accent-baby-blue"
-                />
-              </label>
-
-              <label className="flex items-center justify-between text-sm font-medium text-foreground/80">
-                Customize by year
-                <input
-                  type="checkbox"
-                  checked={customSchedule}
-                  onChange={(e) => setCustomSchedule(e.target.checked)}
-                  className="h-4 w-4 accent-navy dark:accent-baby-blue"
-                />
-              </label>
-
-              {customSchedule && (
-                <div className="rounded-md border border-border">
-                  {years.length === 0 ? (
-                    <p className="p-3 text-xs text-foreground/50">
-                      Set a retirement age older than your current age first.
-                    </p>
-                  ) : (
-                    <>
-                      <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-border px-3 py-2 text-xs font-medium text-foreground/50">
-                        <span>Year</span>
-                        <span className="w-24 text-right">
-                          {frequency === "monthly" ? "$/month" : "$/year"}
-                        </span>
-                        <span className="w-16 text-right">Return</span>
-                      </div>
-                      <div className="max-h-64 overflow-y-auto">
-                        {years.map((yearIndex) => (
-                          <div
-                            key={yearIndex}
-                            className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-b border-border px-3 py-1.5 text-sm last:border-b-0"
-                          >
-                            <span className="text-foreground/60">
-                              Age {currentAge + yearIndex}
-                            </span>
-                            <CurrencyInput
-                              value={getYearContribution(yearIndex)}
-                              onChange={(v) =>
-                                setYearOverride(yearIndex, "contribution", v)
-                              }
-                              className="w-24 rounded border border-border bg-transparent px-1.5 py-1 text-right text-sm outline-none focus:border-navy dark:focus:border-baby-blue"
-                            />
-                            <PlainNumberInput
-                              step={0.1}
-                              value={getYearRate(yearIndex)}
-                              onChange={(v) =>
-                                setYearOverride(yearIndex, "rate", v)
-                              }
-                              className="w-16 rounded border border-border bg-transparent px-1.5 py-1 text-right text-sm outline-none focus:border-navy dark:focus:border-baby-blue [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
                 </div>
               )}
             </div>
-          </details>
+
+            <CheckRow
+              label="Monte Carlo scenarios"
+              description={`Runs ${MONTE_CARLO_TRIALS} randomized market simulations (assuming ${ANNUAL_VOLATILITY_PCT}% annual volatility) and shows the 10th, 50th, and 90th percentile outcomes — the same percentile-based approach real retirement planning tools use.`}
+              checked={monteCarlo}
+              onChange={setMonteCarlo}
+            />
+
+            <LumpSumsField
+              lumpSums={lumpSums}
+              onChange={setLumpSums}
+              choices={years.map((y) => ({
+                value: currentAge + y,
+                label: `Age ${currentAge + y}`,
+              }))}
+              what={(age) => `Age ${age}`}
+            />
+
+            <CheckRow
+              label="Customize by year"
+              checked={customSchedule}
+              onChange={setCustomSchedule}
+            />
+
+            {customSchedule && (
+              <YearlySchedule
+                rows={years.map((y) => ({
+                  year: y,
+                  label: `Age ${currentAge + y}`,
+                }))}
+                amountHeader={frequency === "monthly" ? "$/month" : "$/year"}
+                emptyMessage="Set a retirement age older than your current age first."
+                getContribution={getYearContribution}
+                getRate={getYearRate}
+                onChange={setYearOverride}
+              />
+            )}
+          </Disclosure>
         </div>
 
         <div className="min-w-0 rounded-lg border border-border bg-surface-hover p-6">
@@ -620,37 +402,7 @@ export default function RetirementCalculator() {
                 </div>
               </div>
 
-              {scenarios && (
-                <div className="mt-6">
-                  <p className="mb-2 text-xs font-medium text-foreground/50">
-                    Monte Carlo outcomes
-                  </p>
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div className="rounded-md border border-border p-3">
-                      <p className="text-xs text-foreground/50">
-                        10th percentile
-                      </p>
-                      <p className="mt-1 text-sm font-medium">
-                        ${money(scenarios.p10)}
-                      </p>
-                    </div>
-                    <div className="rounded-md border border-navy/40 bg-navy/5 p-3 dark:border-baby-blue/40 dark:bg-baby-blue/10">
-                      <p className="text-xs text-foreground/50">Median</p>
-                      <p className="mt-1 text-sm font-medium text-navy dark:text-baby-blue">
-                        ${money(scenarios.p50)}
-                      </p>
-                    </div>
-                    <div className="rounded-md border border-border p-3">
-                      <p className="text-xs text-foreground/50">
-                        90th percentile
-                      </p>
-                      <p className="mt-1 text-sm font-medium">
-                        ${money(scenarios.p90)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {scenarios && <MonteCarloResults scenarios={scenarios} />}
 
               <div className="mt-6 flex flex-col gap-2">
                 {[1_000_000, 5_000_000].map((target) => {
@@ -661,6 +413,7 @@ export default function RetirementCalculator() {
                     monthlyRatePct: rate,
                     principal: currentInvested,
                     currentMonthly: currentMonthlyEquivalent,
+                    lumpSumsByMonth,
                   });
 
                   return (
@@ -696,7 +449,7 @@ export default function RetirementCalculator() {
                   ? "This is just an estimate based on the returns and contributions you set — real markets go up and down."
                   : `This is just an estimate based on a steady ${rate}% return — real markets go up and down.`}
                 {hasExtraAdjustments &&
-                  " The “invest more” suggestions above use your base rate and contribution, not the extra adjustments."}
+                  " The “invest more” suggestions above use your base rate, contribution, and lump sums, not the other adjustments."}
               </p>
             </>
           )}

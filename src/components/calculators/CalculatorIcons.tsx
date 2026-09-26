@@ -1,4 +1,4 @@
-export function SavingsGoalIcon({ className }: { className?: string }) {
+export function SinkingFundIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
       <ellipse cx="12" cy="14" rx="8" ry="5.5" stroke="currentColor" strokeWidth="1.5" />
@@ -45,6 +45,22 @@ export function RetirementIcon({ className }: { className?: string }) {
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export function BonusIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <rect x="4" y="11" width="16" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="3" y="7.5" width="18" height="3.5" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="12" y1="7.5" x2="12" y2="20" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M12 7.5C10.5 4 7 4.2 7 6.2c0 1.6 2.6 1.7 5 1.3zM12 7.5c1.5-3.5 5-3.3 5-1.3 0 1.6-2.6 1.7-5 1.3z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
       />
     </svg>
   );

@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "PennyWisecrack",
-  description: "Personal finance basics for teens and students, explained simply.",
+  description: "Personal finance basics for everyone, explained simply.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -11,9 +11,9 @@ export default function Home() {
             <span className="bg-yellow/40 px-1">headache</span>.
           </h1>
           <p className="mt-4 text-lg text-foreground/70">
-            PennyWisecrack breaks down money basics for teens and
-            students — saving, spending, first jobs, and everything school
-            forgot to cover.
+            PennyWisecrack breaks down money basics for everyone — saving,
+            spending, paychecks, investing, and everything school forgot to
+            cover.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-4">
@@ -35,7 +35,7 @@ export default function Home() {
         <div className="mt-20 grid gap-6 sm:grid-cols-3">
           <FeatureCard
             title="Calculators"
-            description="See what saving up for something actually looks like — allowance, a first paycheck, simple budgets, and more."
+            description="See what your money can actually do — saving for a goal, a paycheck, a bonus, retirement, and more."
             href="/calculators"
           />
           <FeatureCard
