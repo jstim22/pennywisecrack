@@ -64,6 +64,21 @@ html[data-motion="reduced"] *::after {
   scroll-behavior: auto !important;
 }
 
+/* The accessibility widget can be docked to the screen edge, out of the way.
+   Both states render in the DOM at all times (see AccessibilityWidget.tsx);
+   this attribute — set synchronously before paint by a11yInitScript, then
+   kept in sync by the widget itself — picks which one shows, with no flash
+   and no hydration mismatch. */
+.a11y-dock-tab {
+  display: none;
+}
+html[data-a11y-docked="true"] .a11y-dock-tab {
+  display: flex;
+}
+html[data-a11y-docked="true"] .a11y-fab-root {
+  display: none;
+}
+
 /* Smooth-scroll to #section links, unless the visitor prefers less motion. */
 @media (prefers-reduced-motion: no-preference) {
   html {

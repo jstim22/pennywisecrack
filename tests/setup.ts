@@ -11,3 +11,18 @@ class ResizeObserverStub {
   disconnect() {}
 }
 globalThis.ResizeObserver ??= ResizeObserverStub;
+
+// jsdom has no matchMedia either; components that check the OS color scheme
+// (dark mode, reduced motion) need one. Always reports "no match" — tests
+// that care about a specific match construct their own mock.
+globalThis.matchMedia ??=
+  ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  })) as typeof window.matchMedia;

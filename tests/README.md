@@ -22,12 +22,14 @@ The suite uses [Vitest](https://vitest.dev) with React Testing Library (see `vit
 | `lib/mortgage.test.ts` | The loan payment formula and amortization schedule, state property-tax guesses, the PMI guess grid (never cheaper with worse credit or less down), when PMI ends, escrow (tax + insurance), extra payments, and affordability ratios |
 | `lib/carLoan.test.ts` | Amount financed (tax, fees, trade-in), the state sales-tax guess and override, payment and terms (6 to 84 months), the over-4-years flag (matches the 20/4/10 guideline's own 48-month cap exactly), depreciation, months underwater (checked step by step), and the 20/4/10 rule |
 | `lib/vehicleSalesTax.test.ts` | Car sales tax rate by state (all 50 states have a rate, including the 0% ones), the national-average fallback, and DC as a special case (excise tax, not a flat rate) |
+| `lib/a11yInitScript.test.ts` | The pre-paint accessibility script (theme/font/contrast/motion/docked), run for real against a fake `document`/`localStorage` rather than just read as source, so a typo in the minified string fails a test |
 | `lib/opportunityCost.test.ts` | What money spent now grows to by retirement (closed-form checks), recurring costs, today's-dollars, hours of work, and the "is it worth it" break-even |
 | `lib/budget.test.ts` | The bucket budget (25/25/25/25 and 50/30/20): dollars per month, week and day, what you can spend vs. save, custom splits that don't add to 100%, tracking what's left, and the example sub-splits |
 | `lib/netWorth.test.ts` | Net worth math and the age comparison, **plus the spreadsheet export**: our own zip and .xlsx writers, read back by an independent reader in the tests (CRCs, sheet XML, live SUM formulas, cached values, escaping, CSV formula-safety) |
 | `lib/sinkingFund.test.ts` | Time to goal for each saving frequency, high-yield savings compounding (APY, monthly), equivalents, duration wording |
 | `lib/growth.test.ts` | The shared growth engine behind Retirement and Compound Interest: pinned numbers for both calculators' defaults and each advanced setting, lump sums, glide path, Monte Carlo ordering |
 | `components/calculators.test.tsx` | Each calculator rendered like a visitor sees it (all thirteen): default numbers, key interactions (state and county pickers, frequency switch, lump sums, customize by year), and messages for edge cases |
+| `components/accessibilityWidget.test.tsx` | The accessibility widget's dock-to-the-edge feature: opening the panel and docking, undocking back to the closed button (not a reopened panel), that it's remembered across a reload, and that docking doesn't touch your other settings |
 | `site.test.ts` | Every calculator route has a page and a tile on the calculators page |
 
 The `check("name", actual, expected)` helper in `helpers.ts` compares numbers to within half a cent unless a looser tolerance is passed.
