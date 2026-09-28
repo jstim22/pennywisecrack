@@ -4,27 +4,41 @@ import { useState } from "react";
 import NumberField from "./NumberField";
 import Disclosure from "./Disclosure";
 import Segmented from "./Segmented";
+import StateSelect from "./StateSelect";
 import BreakdownList from "./BreakdownList";
 import DebtBalanceChart from "./DebtBalanceChart";
 import { describeMonths } from "@/lib/debtPayoff";
 import { dollars, rate1 } from "@/lib/format";
 import {
-  TERM_CHOICES,
+  RECOMMENDED_MAX_TERM_MONTHS,
+  SHORT_TERM_PRESETS,
   estimateCarLoan,
   type CarCondition,
 } from "@/lib/carLoan";
+import { isSpecialVehicleTaxState } from "@/lib/vehicleSalesTax";
+import { getState } from "@/lib/stateTax";
 
 const SWATCH = {
   car: "bg-navy dark:bg-baby-blue",
-  taxFees: "bg-[#eb6834] dark:bg-[#d95926]",
+  tax: "bg-[#eb6834] dark:bg-[#d95926]",
+  fees: "bg-[#e87ba4] dark:bg-[#d55181]",
   interest: "bg-[#eda100] dark:bg-[#c98500]",
 };
 
-const TERMS = TERM_CHOICES.map((t) => ({ value: String(t), label: `${t}` }));
+// Quick-pick loan lengths, all under 36 months, plus a free-form option for
+// anything else — including the longer, suboptimal terms.
+const TERM_MODES: { value: string; label: string }[] = [
+  ...SHORT_TERM_PRESETS.map((t) => ({ value: String(t), label: `${t} mo` })),
+  { value: "custom", label: "Custom" },
+];
 const CONDITIONS: { value: CarCondition; label: string }[] = [
   { value: "new", label: "New" },
   { value: "used", label: "Used" },
 ];
+
+function pctString(n: number) {
+  return `${Number(n.toFixed(2))}%`;
+}
 
 function Check({ ok, children }: { ok: boolean | null; children: React.ReactNode }) {
   return (
@@ -57,9 +71,12 @@ export default function CarLoanCalculator() {
   const [down, setDown] = useState(4_000);
   const [tradeIn, setTradeIn] = useState(0);
   const [apr, setApr] = useState(7);
-  const [term, setTerm] = useState("60");
+  // "6" | "12" | "24" | "custom" — the quick-pick buttons plus a free-form term.
+  const [termMode, setTermMode] = useState("custom");
+  const [customTerm, setCustomTerm] = useState(60);
   const [condition, setCondition] = useState<CarCondition>("new");
-  const [taxPct, setTaxPct] = useState(6);
+  const [stateCode, setStateCode] = useState("");
+  const [taxOverride, setTaxOverride] = useState<number | null>(null);
   const [taxMinusTrade, setTaxMinusTrade] = useState(true);
   const [fees, setFees] = useState(500);
   const [extra, setExtra] = useState(0);
@@ -67,32 +84,60 @@ export default function CarLoanCalculator() {
   const [upkeep, setUpkeep] = useState(0);
   const [income, setIncome] = useState(0);
 
-  const c = estimateCarLoan({
+  const termMonths = termMode === "custom" ? customTerm : Number(termMode);
+
+  function selectTermMode(mode: string) {
+    // Keep the same length when switching into "Custom" without editing it.
+    if (mode === "custom" && termMode !== "custom") setCustomTerm(termMonths);
+    setTermMode(mode);
+  }
+  function selectTerm(months: number) {
+    if ((SHORT_TERM_PRESETS as number[]).includes(months)) {
+      setTermMode(String(months));
+    } else {
+      setCustomTerm(months);
+      setTermMode("custom");
+    }
+  }
+
+  const inputs = {
     price,
     downPayment: down,
     tradeIn,
-    salesTaxPct: taxPct,
+    stateCode,
+    salesTaxRatePct: taxOverride,
     taxOnPriceMinusTrade: taxMinusTrade,
     fees,
     aprPct: apr,
-    termMonths: Number(term),
+    termMonths,
     extraMonthly: extra,
     condition,
     monthlyInsurance: insurance,
     monthlyUpkeep: upkeep,
     income,
-  });
+  };
+  const c = estimateCarLoan(inputs);
+  const guess = estimateCarLoan({ ...inputs, salesTaxRatePct: null });
+  const stateRule = getState(stateCode);
   const empty = c.price <= 0;
   const r = c.rule;
 
   const parts = [
     { key: "car", label: "The car", amount: c.price, swatch: SWATCH.car },
     {
-      key: "taxFees",
-      label: "Sales tax & fees",
-      amount: c.salesTax + c.fees,
-      swatch: SWATCH.taxFees,
+      key: "tax",
+      label: "Sales tax",
+      detail: `${pctString(c.salesTaxRatePct)}${
+        c.salesTaxRateIsGuess
+          ? c.stateHasSalesTaxRate
+            ? ` (${stateRule?.name} average)`
+            : " (national average)"
+          : ""
+      }`,
+      amount: c.salesTax,
+      swatch: SWATCH.tax,
     },
+    { key: "fees", label: "Title, registration & dealer fees", amount: c.fees, swatch: SWATCH.fees },
     { key: "interest", label: "Interest", amount: c.totalInterest, swatch: SWATCH.interest },
   ];
 
@@ -109,9 +154,26 @@ export default function CarLoanCalculator() {
 
           <div>
             <span className="text-sm font-medium text-foreground/80">
-              Loan length (months)
+              Loan length
             </span>
-            <Segmented options={TERMS} value={term} onChange={setTerm} columns={5} />
+            <Segmented options={TERM_MODES} value={termMode} onChange={selectTermMode} columns={4} />
+            {termMode === "custom" && (
+              <div className="mt-2">
+                <NumberField
+                  id="customTerm"
+                  label="Length in months"
+                  value={customTerm}
+                  onChange={setCustomTerm}
+                  suffix="mo"
+                />
+              </div>
+            )}
+            <p className="mt-1.5 text-xs text-foreground/50">
+              Shorter loans usually cost less overall.{" "}
+              {termMonths > RECOMMENDED_MAX_TERM_MONTHS
+                ? "Yours is longer than the 20/4/10 guideline's 4 years — see why that's worth a second look below."
+                : "4 years or less keeps you in good shape, per the 20/4/10 guideline below."}
+            </p>
           </div>
 
           <div>
@@ -124,15 +186,53 @@ export default function CarLoanCalculator() {
             </p>
           </div>
 
+          <StateSelect
+            value={stateCode}
+            onChange={setStateCode}
+            hideNote
+            helper="Used to guess your sales tax rate. You can change the guess in the advanced settings."
+          />
+
           <Disclosure title="Advanced settings">
-            <NumberField
-              id="taxPct"
-              label="Sales tax (%)"
-              value={taxPct}
-              onChange={setTaxPct}
-              suffix="%"
-              step={0.05}
-            />
+            <div>
+              <NumberField
+                id="taxPct"
+                label="Sales tax rate (%)"
+                value={taxOverride ?? guess.salesTaxRatePct}
+                onChange={setTaxOverride}
+                suffix="%"
+                step={0.05}
+              />
+              <p className="mt-1.5 text-xs text-foreground/50">
+                {taxOverride === null
+                  ? guess.stateHasSalesTaxRate
+                    ? `The average rate for ${stateRule?.name}. Your county or city may add more.`
+                    : stateCode
+                      ? `We don't have a simple rate for ${stateRule?.name} (see below), so this is the national average.`
+                      : "Pick your state above to guess this, or type your own rate."
+                  : "You changed this."}
+                {taxOverride !== null && (
+                  <>
+                    {" "}
+                    <button
+                      type="button"
+                      onClick={() => setTaxOverride(null)}
+                      className="underline hover:text-foreground"
+                    >
+                      Reset to the guess ({pctString(guess.salesTaxRatePct)})
+                    </button>
+                  </>
+                )}
+              </p>
+              {isSpecialVehicleTaxState(stateCode) && (
+                <p className="mt-1.5 text-xs text-foreground/50">
+                  {stateRule?.name} doesn&apos;t charge an ordinary sales tax
+                  on cars — it charges an excise tax based on the
+                  vehicle&apos;s weight and fuel economy, so this is just a
+                  placeholder. Check dmv.dc.gov for the real rate.
+                </p>
+              )}
+            </div>
             <label className="flex items-start gap-2 text-xs text-foreground/70">
               <input
                 type="checkbox"
@@ -269,6 +369,20 @@ export default function CarLoanCalculator() {
                 </div>
               )}
 
+              {c.overRecommendedTerm && (
+                <div className="mt-3 rounded-md border border-yellow/50 bg-yellow/10 p-3 text-sm">
+                  <span className="font-semibold">
+                    A term of {describeMonths(c.termMonths)} is longer than
+                    the 20/4/10 guideline&apos;s 4 years.
+                  </span>{" "}
+                  Loans past 4 years usually cost more interest overall and
+                  leave you owing more than the car is worth for longer, since
+                  cars lose value fastest in the first few years. Where you
+                  can, a shorter term (or a smaller loan) tends to work out
+                  better — see the full guideline below.
+                </div>
+              )}
+
               <div className="mt-4">
                 <p className="text-xs font-medium text-foreground/50">
                   The 20/4/10 rule of thumb
@@ -347,14 +461,21 @@ export default function CarLoanCalculator() {
                 <button
                   key={row.term}
                   type="button"
-                  onClick={() => setTerm(String(row.term))}
+                  onClick={() => selectTerm(row.term)}
                   aria-pressed={row.term === c.termMonths}
                   className={
                     "grid w-full grid-cols-[1fr_auto_auto_auto] items-center gap-3 border-b border-border px-3 py-2 text-left last:border-b-0 hover:bg-surface-hover " +
                     (row.term === c.termMonths ? "bg-navy/5 font-medium dark:bg-baby-blue/10" : "")
                   }
                 >
-                  <span>{row.term} months ({row.term / 12} yrs)</span>
+                  <span>
+                    {describeMonths(row.term)}
+                    {row.overRecommendedTerm && (
+                      <span className="ml-1.5 text-xs font-normal text-[#c0410f] dark:text-[#f0916b]">
+                        over 4 yrs
+                      </span>
+                    )}
+                  </span>
                   <span className="w-16 text-right">{dollars(row.payment)}</span>
                   <span className="w-16 text-right">{dollars(row.totalInterest)}</span>
                   <span className="w-20 text-right">{dollars(row.totalCost)}</span>
@@ -363,6 +484,8 @@ export default function CarLoanCalculator() {
             </div>
             <p className="mt-2 text-xs text-foreground/50">
               Total cost is your down payment and trade-in plus every payment.
+              Terms marked &ldquo;over 4 yrs&rdquo; tend to cost more
+              altogether — see why above.
             </p>
           </section>
 
@@ -370,10 +493,12 @@ export default function CarLoanCalculator() {
             An estimate, not a loan offer. Value estimates are a rough guide (a
             new car is often said to lose about 20% in its first year and about
             15% a year after; a used car about 10% a year) — real values
-            depend on the make, model, and mileage. Sales tax rules and fees
-            vary by state and dealer, and interest rates depend on your credit.
-            Check the buyer&apos;s order and loan agreement for the real
-            numbers.
+            depend on the make, model, and mileage. Sales tax is a
+            state-level guess (Georgia and South Carolina use a separate
+            title tax folded in here as one rate) and doesn&apos;t include
+            county or city tax, which many places add on top. Fees vary by
+            dealer, and interest rates depend on your credit. Check the
+            buyer&apos;s order and loan agreement for the real numbers.
           </p>
         </>
       )}

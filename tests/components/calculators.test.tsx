@@ -818,24 +818,62 @@ describe("Mortgage Calculator", () => {
 });
 
 describe("Car Loan Calculator", () => {
-  it("opens on a $30,000 car, $4,000 down, 7% for 60 months", () => {
+  it("opens on a $30,000 car, $4,000 down, 7% for 5 years, with no state picked", () => {
     render(<CarLoanCalculator />);
-    expect(text()).toContain("Your monthly payment$560");
+    expect(text()).toContain("Your monthly payment$554");
     expect(text()).toContain("for 5 years");
-    expect(text()).toContain("You borrow$28,300");
-    expect(text()).toContain("Sales tax & fees$2,300");
-    expect(text()).toContain("Total cost$37,622");
+    expect(text()).toContain("You borrow$27,997");
+    expect(text()).toContain("Sales tax4.99% (national average)$1,497");
+    expect(text()).toContain("Title, registration & dealer fees$500");
+    expect(text()).toContain("Total cost$37,262");
   });
 
-  it("switches loan lengths, and compares them", () => {
+  it("flags the default 5-year term against the 20/4/10 guideline's 4 years", () => {
     render(<CarLoanCalculator />);
-    click("48");
-    expect(text()).toContain("Your monthly payment$678");
+    expect(text()).toContain("A term of 5 years is longer than the 20/4/10 guideline's 4 years");
+    expect(text()).toContain("Loans past 4 years usually cost more interest overall");
+  });
+
+  it("switches loan lengths with the quick-pick buttons", () => {
+    render(<CarLoanCalculator />);
+    click("6 mo");
+    expect(text()).toContain("Your monthly payment$4,762");
+    expect(text()).toContain("for 6 months");
+    expect(document.getElementById("customTerm")).toBeNull();
+    expect(text()).not.toContain("longer than the 20/4/10 guideline");
+    click("24 mo");
+    expect(text()).toContain("Your monthly payment$1,253");
+  });
+
+  it("switches to Custom and remembers the length you were on", () => {
+    render(<CarLoanCalculator />);
+    click("12 mo");
+    click("Custom");
+    expect(field("customTerm").value).toBe("12");
+    type("customTerm", "45");
+    expect(text()).toContain("for 3 years, 9 months");
+    expect(text()).not.toContain("longer than the 20/4/10 guideline");
+    type("customTerm", "54");
+    expect(text()).toContain("for 4 years, 6 months");
+    expect(text()).toContain("A term of 4 years, 6 months is longer than the 20/4/10 guideline's 4 years");
+  });
+
+  it("compares loan lengths from 6 to 84 months, marking the ones over 4 years", () => {
+    render(<CarLoanCalculator />);
     const rows = document.querySelectorAll("section button[aria-pressed]");
-    expect(rows).toHaveLength(5);
-    expect(rows[4].textContent).toContain("$427");
-    fireEvent.click(rows[3]);
-    expect(text()).toContain("for 6 years");
+    expect(rows).toHaveLength(8);
+    expect(rows[3].textContent).toContain("$864");
+    expect(rows[3].textContent).not.toContain("over 4 yrs");
+    expect(rows[4].textContent).toContain("$670");
+    expect(rows[4].textContent).not.toContain("over 4 yrs");
+    expect(rows[5].textContent).toContain("$554");
+    expect(rows[5].textContent).toContain("over 4 yrs");
+    expect(rows[7].textContent).toContain("$423");
+    expect(rows[7].textContent).toContain("over 4 yrs");
+    fireEvent.click(rows[7]);
+    expect(text()).toContain("Your monthly payment$423");
+    expect(field("customTerm").value).toBe("84");
+    expect(screen.getByRole("button", { name: "Custom" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("warns when you'd owe more than the car is worth", () => {
@@ -849,8 +887,8 @@ describe("Car Loan Calculator", () => {
   it("takes a trade-in off what you borrow, and off the sales tax", () => {
     render(<CarLoanCalculator />);
     type("tradeIn", "10000");
-    // tax: 6% of $20,000 = $1,200; borrow 30,000 + 1,200 + 500 - 4,000 - 10,000
-    expect(text()).toContain("You borrow$17,700");
+    // tax (national average 4.99%) on $20,000; borrow 30,000 + 998 + 500 - 4,000 - 10,000
+    expect(text()).toContain("You borrow$17,498");
   });
 
   it("checks the 20/4/10 rule", () => {
@@ -859,7 +897,7 @@ describe("Car Loan Calculator", () => {
     expect(text()).toContain("Doesn't meet it: Loan of 4 years or less");
     expect(text()).toContain("Not checked: Total car costs under 10% of your income");
     type("down", "6000");
-    click("48");
+    fireEvent.click(document.querySelectorAll("section button[aria-pressed]")[4]); // 48 months
     type("income", "120000");
     type("insurance", "120");
     type("upkeep", "100");
@@ -884,6 +922,48 @@ describe("Car Loan Calculator", () => {
     render(<CarLoanCalculator />);
     const label = document.querySelector('svg[role="img"]')!.getAttribute("aria-label");
     expect(label).toContain("Loan balance compared with the car's estimated value");
+  });
+
+  describe("sales tax by state", () => {
+    it("asks for a state, and guesses the rate once you pick one", () => {
+      render(<CarLoanCalculator />);
+      expect(text()).toContain("Used to guess your sales tax rate");
+      pick("state", "IL");
+      expect(text()).toContain("Sales tax6.25% (Illinois average)$1,875");
+    });
+
+    it("shows the advanced-settings rate and note", () => {
+      render(<CarLoanCalculator />);
+      expect(field("taxPct").value).toBe("4.99");
+      pick("state", "IL");
+      expect(field("taxPct").value).toBe("6.25");
+      expect(text()).toContain("The average rate for Illinois");
+    });
+
+    it("lets you override the guess, and reset it", () => {
+      render(<CarLoanCalculator />);
+      pick("state", "IL");
+      type("taxPct", "2");
+      expect(text()).toContain("You changed this.");
+      expect(text()).toContain("Sales tax2%$600");
+      click("Reset to the guess (6.25%)");
+      expect(field("taxPct").value).toBe("6.25");
+    });
+
+    it("has no tax in a no-tax state", () => {
+      render(<CarLoanCalculator />);
+      pick("state", "OR");
+      expect(field("taxPct").value).toBe("0");
+    });
+
+    it("flags DC's excise tax as a special case", () => {
+      render(<CarLoanCalculator />);
+      pick("state", "DC");
+      expect(text()).toContain("doesn't charge an ordinary sales tax on cars");
+      expect(text()).toContain("excise tax based on the vehicle's weight and fuel economy");
+      expect(text()).toContain("dmv.dc.gov");
+      expect(text()).toContain("We don't have a simple rate for District of Columbia");
+    });
   });
 });
 

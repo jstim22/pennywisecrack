@@ -1,8 +1,17 @@
 import { amortize } from "./amortization";
+import { hasVehicleSalesTaxRate, vehicleSalesTaxRatePct } from "./vehicleSalesTax";
 
 export type CarCondition = "new" | "used";
 
-export const TERM_CHOICES = [36, 48, 60, 72, 84];
+// Quick-pick loan lengths under 36 months, plus a "custom" option for
+// anything else (in the UI). Shorter loans mean less interest and less time
+// owing more than the car is worth, so these come first.
+export const SHORT_TERM_PRESETS = [6, 12, 24];
+// The full range shown in the "compare loan lengths" table.
+export const TERM_CHOICES = [6, 12, 24, 36, 48, 60, 72, 84];
+// Terms longer than this are flagged as suboptimal (see the callout in the
+// UI) — the same 4-year cap as the 20/4/10 guideline's term check.
+export const RECOMMENDED_MAX_TERM_MONTHS = 48;
 
 // Rough guides, not appraisals. New cars are commonly said to lose about 20%
 // of their value in the first year and around 15% a year after that; used
@@ -16,7 +25,9 @@ export type CarInputs = {
   price: number;
   downPayment: number;
   tradeIn: number;
-  salesTaxPct: number;
+  stateCode: string;
+  // The sales tax rate to use, or null to guess it from the state.
+  salesTaxRatePct: number | null;
   // In most states sales tax is charged on the price minus your trade-in.
   taxOnPriceMinusTrade: boolean;
   // Title, registration, and dealer fees.
@@ -52,14 +63,17 @@ export function estimateCarLoan(raw: CarInputs) {
   const price = clamp(raw.price, 0, 10_000_000);
   const tradeIn = clamp(raw.tradeIn, 0, price);
   const down = clamp(raw.downPayment, 0, 10_000_000);
-  const taxRate = clamp(raw.salesTaxPct, 0, 25);
+  const salesTaxRatePct =
+    raw.salesTaxRatePct === null
+      ? vehicleSalesTaxRatePct(raw.stateCode)
+      : clamp(raw.salesTaxRatePct, 0, 25);
   const fees = clamp(raw.fees, 0, 1_000_000);
   const aprPct = clamp(raw.aprPct, 0, 40);
   const termMonths = Math.round(clamp(raw.termMonths, 1, 120));
   const extra = clamp(raw.extraMonthly, 0, 1_000_000);
 
   const taxable = raw.taxOnPriceMinusTrade ? price - tradeIn : price;
-  const salesTax = (taxable * taxRate) / 100;
+  const salesTax = (taxable * salesTaxRatePct) / 100;
   const outTheDoor = price + salesTax + fees;
   const financed = Math.max(outTheDoor - down - tradeIn, 0);
 
@@ -94,6 +108,7 @@ export function estimateCarLoan(raw: CarInputs) {
       totalInterest: r.totalInterest,
       totalPaid: r.totalPaid,
       totalCost: down + tradeIn + r.totalPaid,
+      overRecommendedTerm: term > RECOMMENDED_MAX_TERM_MONTHS,
     };
   });
 
@@ -106,6 +121,9 @@ export function estimateCarLoan(raw: CarInputs) {
   return {
     price,
     salesTax,
+    salesTaxRatePct,
+    salesTaxRateIsGuess: raw.salesTaxRatePct === null,
+    stateHasSalesTaxRate: hasVehicleSalesTaxRate(raw.stateCode),
     fees,
     outTheDoor,
     down,
@@ -115,6 +133,10 @@ export function estimateCarLoan(raw: CarInputs) {
     payment: plain.payment,
     extra,
     termMonths,
+    // Longer loans mean more interest and more time owing more than the car
+    // is worth (see the underwater chart), so terms past the 20/4/10
+    // guideline's 4-year cap are flagged with a callout.
+    overRecommendedTerm: termMonths > RECOMMENDED_MAX_TERM_MONTHS,
     totalInterest: withExtra.totalInterest,
     totalPaid: withExtra.totalPaid,
     payoffMonths: withExtra.months,

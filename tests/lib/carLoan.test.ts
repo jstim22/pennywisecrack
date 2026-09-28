@@ -1,12 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { check, near } from "../helpers";
-import { carValue, estimateCarLoan, type CarInputs } from "@/lib/carLoan";
+import {
+  RECOMMENDED_MAX_TERM_MONTHS,
+  SHORT_TERM_PRESETS,
+  TERM_CHOICES,
+  carValue,
+  estimateCarLoan,
+  type CarInputs,
+} from "@/lib/carLoan";
+import { NATIONAL_VEHICLE_SALES_TAX_RATE } from "@/lib/vehicleSalesTax";
 
 const base: CarInputs = {
   price: 30_000,
   downPayment: 5_000,
   tradeIn: 0,
-  salesTaxPct: 6,
+  stateCode: "",
+  salesTaxRatePct: 6,
   taxOnPriceMinusTrade: true,
   fees: 500,
   aprPct: 7,
@@ -41,10 +50,51 @@ describe("trade-in and sales tax", () => {
   });
 });
 
+describe("sales tax by state", () => {
+  it("uses the U.S. average when no state is picked and no rate is typed", () => {
+    const r = est({ salesTaxRatePct: null });
+    check("rate", r.salesTaxRatePct, NATIONAL_VEHICLE_SALES_TAX_RATE);
+    expect(r.salesTaxRateIsGuess).toBe(true);
+    expect(r.stateHasSalesTaxRate).toBe(false);
+  });
+  it("guesses a state's own rate once one is picked", () => {
+    const r = est({ salesTaxRatePct: null, stateCode: "IL" });
+    check("Illinois rate", r.salesTaxRatePct, 6.25);
+    check("tax on $30,000", r.salesTax, 30_000 * 0.0625);
+    expect(r.salesTaxRateIsGuess).toBe(true);
+    expect(r.stateHasSalesTaxRate).toBe(true);
+  });
+  it("has no sales tax in a no-tax state", () => {
+    const r = est({ salesTaxRatePct: null, stateCode: "OR" });
+    check("rate", r.salesTaxRatePct, 0);
+    check("tax", r.salesTax, 0);
+    expect(r.stateHasSalesTaxRate).toBe(true);
+  });
+  it("your own rate overrides the guess", () => {
+    const r = est({ salesTaxRatePct: 2, stateCode: "IL" });
+    check("your rate wins", r.salesTaxRatePct, 2);
+    check("tax", r.salesTax, 600);
+    expect(r.salesTaxRateIsGuess).toBe(false);
+  });
+  it("DC has no ordinary sales tax rate to guess", () => {
+    const r = est({ salesTaxRatePct: null, stateCode: "DC" });
+    expect(r.stateHasSalesTaxRate).toBe(false);
+    check("falls back to the U.S. average", r.salesTaxRatePct, NATIONAL_VEHICLE_SALES_TAX_RATE);
+  });
+  it("clamps a typed rate to a sane range", () => {
+    check("negative clamped to 0", est({ salesTaxRatePct: -5 }).salesTaxRatePct, 0);
+    check("huge clamped to 25", est({ salesTaxRatePct: 100 }).salesTaxRatePct, 25);
+  });
+});
+
 describe("terms and interest", () => {
   const c = est({});
-  it("compares 36 to 84 months", () => {
-    expect(c.compare.map((r) => r.term)).toEqual([36, 48, 60, 72, 84]);
+  it("the quick-pick presets are all under 36 months", () => {
+    for (const t of SHORT_TERM_PRESETS) expect(t).toBeLessThan(36);
+  });
+  it("compares 6 to 84 months", () => {
+    expect(c.compare.map((r) => r.term)).toEqual(TERM_CHOICES);
+    expect(TERM_CHOICES).toEqual([6, 12, 24, 36, 48, 60, 72, 84]);
   });
   it("longer terms mean lower payments and more interest", () => {
     for (let i = 1; i < c.compare.length; i++) {
@@ -52,7 +102,7 @@ describe("terms and interest", () => {
       expect(c.compare[i].totalInterest).toBeGreaterThan(c.compare[i - 1].totalInterest);
     }
   });
-  check("the 60-month row matches the main result", c.compare[2].payment, c.payment, 1e-9);
+  check("the 60-month row matches the main result", c.compare[5].payment, c.payment, 1e-9);
   check("0% financing costs no interest", est({ aprPct: 0 }).totalInterest, 0);
   check("0% payment", est({ aprPct: 0 }).payment, 27_300 / 60);
   it("extra payments save interest and months", () => {
@@ -60,6 +110,33 @@ describe("terms and interest", () => {
     expect(x.interestSavedByExtra).toBeGreaterThan(500);
     expect(x.monthsSavedByExtra).toBeGreaterThan(5);
     check("the required payment doesn't change", x.payment, c.payment, 1e-9);
+  });
+});
+
+describe("terms longer than the 20/4/10 guideline's 4 years are flagged", () => {
+  check("the cutoff is 48 months (4 years)", RECOMMENDED_MAX_TERM_MONTHS, 48);
+  it("flags anything past it", () => {
+    expect(est({ termMonths: 48 }).overRecommendedTerm).toBe(false);
+    expect(est({ termMonths: 49 }).overRecommendedTerm).toBe(true);
+    expect(est({ termMonths: 60 }).overRecommendedTerm).toBe(true);
+  });
+  it("doesn't flag the short presets, or 36 months", () => {
+    for (const t of [...SHORT_TERM_PRESETS, 36]) {
+      expect(est({ termMonths: t }).overRecommendedTerm, String(t)).toBe(false);
+    }
+  });
+  it("flags the same way in the comparison table", () => {
+    const rows = est({}).compare;
+    for (const row of rows) {
+      expect(row.overRecommendedTerm, String(row.term)).toBe(row.term > 48);
+    }
+    expect(rows.filter((r) => r.overRecommendedTerm).map((r) => r.term)).toEqual([60, 72, 84]);
+  });
+  it("matches the 20/4/10 guideline's own term check exactly", () => {
+    for (const termMonths of [12, 36, 48, 49, 60, 84]) {
+      const r = est({ termMonths });
+      expect(r.overRecommendedTerm, String(termMonths)).toBe(!r.rule.termOk);
+    }
   });
 });
 
@@ -135,8 +212,8 @@ describe("edge cases", () => {
     expect(c.totalInterest).toBe(0);
   });
   it("stays finite for junk input", () => {
-    const c = estimateCarLoan({ ...base, price: NaN, downPayment: NaN, tradeIn: NaN, salesTaxPct: NaN, fees: NaN, aprPct: NaN, termMonths: NaN, extraMonthly: NaN, income: NaN, monthlyInsurance: NaN, monthlyUpkeep: NaN });
-    for (const v of [c.payment, c.totalCost, c.financed, c.underwaterUntil]) {
+    const c = estimateCarLoan({ ...base, price: NaN, downPayment: NaN, tradeIn: NaN, salesTaxRatePct: NaN, fees: NaN, aprPct: NaN, termMonths: NaN, extraMonthly: NaN, income: NaN, monthlyInsurance: NaN, monthlyUpkeep: NaN, stateCode: "ZZ" });
+    for (const v of [c.payment, c.totalCost, c.financed, c.underwaterUntil, c.salesTaxRatePct]) {
       expect(Number.isFinite(v)).toBe(true);
     }
   });
