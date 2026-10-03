@@ -79,6 +79,51 @@ html[data-a11y-docked="true"] .a11y-fab-root {
   display: none;
 }
 
+/* The homepage hero's color glow, centered on the logo bulb: yellow at the
+   bulb, shifting through baby-blue to nothing. Pure decoration, so it also
+   steps aside in high-contrast mode (see .decor below). */
+.bulb-glow {
+  background: radial-gradient(
+    closest-side,
+    rgb(242 201 76 / 0.6) 0%,
+    rgb(242 201 76 / 0.32) 12%,
+    rgb(190 215 200 / 0.3) 28%,
+    rgb(142 205 240 / 0.3) 45%,
+    rgb(142 205 240 / 0.12) 70%,
+    transparent 100%
+  );
+}
+[data-theme="dark"] .bulb-glow {
+  background: radial-gradient(
+    closest-side,
+    rgb(242 201 76 / 0.4) 0%,
+    rgb(242 201 76 / 0.18) 12%,
+    rgb(142 205 240 / 0.14) 35%,
+    rgb(142 205 240 / 0.07) 60%,
+    transparent 100%
+  );
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bulb-glow {
+    animation: bulb-breathe 7s ease-in-out infinite;
+  }
+}
+@keyframes bulb-breathe {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Purely decorative color blobs (like the homepage hero's) step aside in
+   high-contrast mode so they can't reduce readability. */
+[data-contrast="high"] .decor {
+  display: none;
+}
+
 /* Smooth-scroll to #section links, unless the visitor prefers less motion. */
 @media (prefers-reduced-motion: no-preference) {
   html {

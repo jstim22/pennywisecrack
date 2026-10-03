@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import Logo from "./Logo";
 
 const links = [
   { href: "/", label: "Home" },
@@ -19,11 +20,8 @@ export default function Nav() {
   return (
     <header className="border-b border-border">
       <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-        <Link
-          href="/"
-          className="text-lg font-semibold tracking-tight text-navy dark:text-baby-blue"
-        >
-          PennyWisecrack
+        <Link href="/" aria-label="PennyWisecrack home">
+          <Logo />
         </Link>
 
         <ul className="hidden gap-8 text-sm font-medium sm:flex">

@@ -26,7 +26,7 @@ export default function RecentPostsRibbon() {
           <Link
             key={post.slug}
             href={`/blog/${post.slug}`}
-            className="block overflow-hidden rounded-lg border border-border transition-colors hover:border-baby-blue"
+            className="block overflow-hidden rounded-lg border border-border bg-background transition-colors hover:border-baby-blue"
           >
             <PostThumbnail
               src={post.thumbnail}

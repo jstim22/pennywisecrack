@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Logo from "./Logo";
 
 export default function Footer() {
   const year = new Date().getFullYear();
@@ -6,6 +7,9 @@ export default function Footer() {
   return (
     <footer className="border-t border-border">
       <div className="mx-auto flex max-w-5xl flex-col gap-3 px-6 py-8 text-sm text-foreground/60">
+        <Link href="/" aria-label="PennyWisecrack home" className="self-start">
+          <Logo size="sm" />
+        </Link>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p>© {year} PennyWisecrack. All rights reserved.</p>
           <ul className="flex gap-5">
