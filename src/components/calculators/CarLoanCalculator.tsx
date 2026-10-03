@@ -11,7 +11,7 @@ import { describeMonths } from "@/lib/debtPayoff";
 import { dollars, rate1 } from "@/lib/format";
 import {
   RECOMMENDED_MAX_TERM_MONTHS,
-  SHORT_TERM_PRESETS,
+  TERM_PRESETS,
   estimateCarLoan,
   type CarCondition,
 } from "@/lib/carLoan";
@@ -25,10 +25,10 @@ const SWATCH = {
   interest: "bg-[#eda100] dark:bg-[#c98500]",
 };
 
-// Quick-pick loan lengths, all under 36 months, plus a free-form option for
-// anything else — including the longer, suboptimal terms.
+// Quick-pick loan lengths, plus a free-form option for anything else
+// (including terms past the 4-year guideline).
 const TERM_MODES: { value: string; label: string }[] = [
-  ...SHORT_TERM_PRESETS.map((t) => ({ value: String(t), label: `${t} mo` })),
+  ...TERM_PRESETS.map((t) => ({ value: String(t), label: `${t} mo` })),
   { value: "custom", label: "Custom" },
 ];
 const CONDITIONS: { value: CarCondition; label: string }[] = [
@@ -92,7 +92,7 @@ export default function CarLoanCalculator() {
     setTermMode(mode);
   }
   function selectTerm(months: number) {
-    if ((SHORT_TERM_PRESETS as number[]).includes(months)) {
+    if ((TERM_PRESETS as number[]).includes(months)) {
       setTermMode(String(months));
     } else {
       setCustomTerm(months);
@@ -156,7 +156,7 @@ export default function CarLoanCalculator() {
             <span className="text-sm font-medium text-foreground/80">
               Loan length
             </span>
-            <Segmented options={TERM_MODES} value={termMode} onChange={selectTermMode} columns={4} />
+            <Segmented options={TERM_MODES} value={termMode} onChange={selectTermMode} columns={3} />
             {termMode === "custom" && (
               <div className="mt-2">
                 <NumberField

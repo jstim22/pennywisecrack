@@ -843,6 +843,24 @@ describe("Car Loan Calculator", () => {
     expect(text()).not.toContain("longer than the 20/4/10 guideline");
     click("24 mo");
     expect(text()).toContain("Your monthly payment$1,253");
+    click("36 mo");
+    expect(text()).toContain("Your monthly payment$864");
+    expect(text()).toContain("for 3 years");
+    expect(text()).not.toContain("longer than the 20/4/10 guideline");
+    click("48 mo");
+    expect(text()).toContain("Your monthly payment$670");
+    expect(text()).toContain("for 4 years");
+    expect(text()).not.toContain("longer than the 20/4/10 guideline");
+    expect(document.getElementById("customTerm")).toBeNull();
+  });
+
+  it("highlights the matching button when you pick a length from the comparison table", () => {
+    render(<CarLoanCalculator />);
+    fireEvent.click(document.querySelectorAll("section button[aria-pressed]")[3]); // 36 months
+    expect(screen.getByRole("button", { name: "36 mo" }).getAttribute("aria-pressed")).toBe("true");
+    expect(document.getElementById("customTerm")).toBeNull();
+    click("Custom");
+    expect(field("customTerm").value).toBe("36");
   });
 
   it("switches to Custom and remembers the length you were on", () => {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { check, near } from "../helpers";
 import {
   RECOMMENDED_MAX_TERM_MONTHS,
-  SHORT_TERM_PRESETS,
+  TERM_PRESETS,
   TERM_CHOICES,
   carValue,
   estimateCarLoan,
@@ -89,8 +89,11 @@ describe("sales tax by state", () => {
 
 describe("terms and interest", () => {
   const c = est({});
-  it("the quick-pick presets are all under 36 months", () => {
-    for (const t of SHORT_TERM_PRESETS) expect(t).toBeLessThan(36);
+  it("the quick-pick presets are 6, 12, 24, 36, and 48 months", () => {
+    expect(TERM_PRESETS).toEqual([6, 12, 24, 36, 48]);
+  });
+  it("every preset is also a row in the comparison table", () => {
+    for (const t of TERM_PRESETS) expect(TERM_CHOICES).toContain(t);
   });
   it("compares 6 to 84 months", () => {
     expect(c.compare.map((r) => r.term)).toEqual(TERM_CHOICES);
@@ -120,8 +123,8 @@ describe("terms longer than the 20/4/10 guideline's 4 years are flagged", () => 
     expect(est({ termMonths: 49 }).overRecommendedTerm).toBe(true);
     expect(est({ termMonths: 60 }).overRecommendedTerm).toBe(true);
   });
-  it("doesn't flag the short presets, or 36 months", () => {
-    for (const t of [...SHORT_TERM_PRESETS, 36]) {
+  it("doesn't flag any quick-pick preset, including 36 and 48 months", () => {
+    for (const t of TERM_PRESETS) {
       expect(est({ termMonths: t }).overRecommendedTerm, String(t)).toBe(false);
     }
   });

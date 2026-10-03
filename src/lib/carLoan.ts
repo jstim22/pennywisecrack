@@ -3,10 +3,10 @@ import { hasVehicleSalesTaxRate, vehicleSalesTaxRatePct } from "./vehicleSalesTa
 
 export type CarCondition = "new" | "used";
 
-// Quick-pick loan lengths under 36 months, plus a "custom" option for
-// anything else (in the UI). Shorter loans mean less interest and less time
-// owing more than the car is worth, so these come first.
-export const SHORT_TERM_PRESETS = [6, 12, 24];
+// Quick-pick loan lengths (the buttons in the UI), plus a "custom" option for
+// anything else. Shorter loans mean less interest and less time owing more
+// than the car is worth, so the short ones come first.
+export const TERM_PRESETS = [6, 12, 24, 36, 48];
 // The full range shown in the "compare loan lengths" table.
 export const TERM_CHOICES = [6, 12, 24, 36, 48, 60, 72, 84];
 // Terms longer than this are flagged as suboptimal (see the callout in the
